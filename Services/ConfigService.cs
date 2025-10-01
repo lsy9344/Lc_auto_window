@@ -6,35 +6,38 @@ using Lc_auto.Models;
 namespace Lc_auto.Services;
 
 /// <summary>
-/// ?�정 관�??�비??구현 (config.json 로드, 검�? Hot Reload)
+/// 설정 파일(config.json)을 로드하고 필수 필드를 검증하며 AlertsScheduler를 초기화하는 서비스입니다.
 /// </summary>
 public class ConfigService : IConfigService
 {
+    private readonly IAlertsScheduler _alertsScheduler;
     private AppConfig _current;
 
     /// <summary>
-    /// ?�재 로드???�플리�??�션 ?�정
+    /// 현재 메모리에 로드된 애플리케이션 설정입니다.
     /// </summary>
     public AppConfig Current => _current;
 
     /// <summary>
-    /// ?�정 ?�일 변�???발생?�는 ?�벤??(Hot Reload, Phase 2?�서 구현 ?�정)
+    /// 설정 파일 변경 시 발생하는 이벤트 (Hot Reload, Phase 2에서 구현 예정).
     /// </summary>
-    #pragma warning disable CS0067 // Reserved for Hot Reload implementation in later phase
+#pragma warning disable CS0067 // Reserved for Hot Reload implementation in later phase
     public event EventHandler<AppConfig>? ConfigChanged;
 #pragma warning restore CS0067
 
     /// <summary>
-    /// ConfigService ?�성??- config.json ?�일??로드?�여 초기??
+    /// ConfigService를 생성하고 즉시 config.json을 로드합니다.
     /// </summary>
-    public ConfigService()
+    /// <param name="alertsScheduler">알림 스케줄을 적용할 AlertsScheduler 인스턴스</param>
+    public ConfigService(IAlertsScheduler alertsScheduler)
     {
-        _current = new AppConfig(); // 기본값으�?초기??
+        _alertsScheduler = alertsScheduler ?? throw new ArgumentNullException(nameof(alertsScheduler));
+        _current = new AppConfig();
         LoadConfig();
     }
 
     /// <summary>
-    /// config.json ?�일???�어??AppConfig 객체�???��?�화?�고 검�?
+    /// config.json 파일을 역직렬화하고 필수 필드를 검증한 뒤 AlertsScheduler에 적용합니다.
     /// </summary>
     private void LoadConfig()
     {
@@ -42,86 +45,85 @@ public class ConfigService : IConfigService
 
         try
         {
-            // JSON ?�일 ?�기
-            string json = File.ReadAllText(configPath);
+            var json = File.ReadAllText(configPath);
 
-            // JSON ??��?�화 ?�션 ?�정
             var options = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             };
 
-            // AppConfig 객체�???��?�화
             var config = JsonSerializer.Deserialize<AppConfig>(json, options);
 
-            if (config != null)
+            if (config == null)
             {
-                _current = config;
+                LoggingService.LogWarn("config.json 역직렬화 결과가 null이어서 기본 설정을 유지합니다.");
+                _alertsScheduler.Stop();
+                return;
+            }
 
-                // ?�수 ?�드 검�?
-                if (!ValidateConfig())
-                {
-                    Console.WriteLine("[ConfigService] 경고: ?��? ?�수 ?�정 ?�드가 ?�락?�었?�니?? 기본값으�?계속 진행?�니??");
-                }
-                else
-                {
-                    Console.WriteLine("[ConfigService] config.json 로드 �?검�??�료.");
-                }
+            _current = config;
 
-                // TODO: Phase 2?�서 Hot Reload 구현 ???�벤??발생
+            var alerts = _current.Alerts ?? Array.Empty<AlertConfig>();
+            _alertsScheduler.Apply(alerts);
+            _alertsScheduler.Start();
+
+            if (!ValidateConfig())
+            {
+                LoggingService.LogWarn("config.json 필수 필드 검증에 실패했지만 기본 설정 값으로 계속 실행합니다.");
             }
             else
             {
-                Console.WriteLine($"[ConfigService] ?�류: {configPath} ??��?�화 ?�패 (null 반환). 기본�??�용.");
+                LoggingService.LogInfo("config.json 로드 및 검증을 완료했습니다.");
             }
+
+            // TODO: Phase 2에서 Hot Reload 구현 시 ConfigChanged 이벤트를 발생시킵니다.
         }
-        catch (FileNotFoundException)
+        catch (FileNotFoundException ex)
         {
-            Console.WriteLine($"[ConfigService] ?�류: {configPath} ?�일??찾을 ???�습?�다. 기본�??�용.");
+            LoggingService.LogError($"config.json 파일을 찾을 수 없어 기본 설정으로 실행합니다. 경로: {configPath}", ex);
+            _alertsScheduler.Stop();
         }
         catch (JsonException ex)
         {
-            Console.WriteLine($"[ConfigService] ?�류: {configPath} JSON ?�싱 ?�패 - {ex.Message}. 기본�??�용.");
+            LoggingService.LogError($"config.json JSON 파싱에 실패하여 기본 설정으로 실행합니다. 경로: {configPath}", ex);
+            _alertsScheduler.Stop();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ConfigService] ?�류: ?�정 로드 �??�외 발생 - {ex.Message}. 기본�??�용.");
+            LoggingService.LogError("설정 로드 중 알 수 없는 오류가 발생하여 기본 설정으로 실행합니다.", ex);
+            _alertsScheduler.Stop();
         }
     }
 
     /// <summary>
-    /// ?�수 ?�정 ?�드 검�?(videoPath, targetFolder, p1.featureId, p2.featureId)
+    /// 필수 설정 필드(videoPath, targetFolder, automation.p1/p2.featureId)를 검증합니다.
     /// </summary>
-    /// <returns>모든 ?�수 ?�드가 ?�효?�면 true, ?�나?�도 ?�락?�면 false</returns>
+    /// <returns>모든 필수 필드가 유효하면 true, 하나라도 부적절하면 false</returns>
     private bool ValidateConfig()
     {
-        bool isValid = true;
+        var isValid = true;
 
-        // Media.VideoPath 검�?
         if (string.IsNullOrWhiteSpace(_current.Media?.VideoPath))
         {
-            Console.WriteLine("[ConfigService] 검�??�패: media.videoPath ?�드가 비어?�습?�다.");
+            LoggingService.LogWarn("config.json 검증 실패: media.videoPath 값이 비어 있습니다.");
             isValid = false;
         }
 
-        // Paths.TargetFolder 검�?
         if (string.IsNullOrWhiteSpace(_current.Paths?.TargetFolder))
         {
-            Console.WriteLine("[ConfigService] 검�??�패: paths.targetFolder ?�드가 비어?�습?�다.");
+            LoggingService.LogWarn("config.json 검증 실패: paths.targetFolder 값이 비어 있습니다.");
             isValid = false;
         }
 
-        // Automation.P1.FeatureId 검�?(start_photo)
         if (string.IsNullOrWhiteSpace(_current.Automation?.P1?.FeatureId))
         {
-            Console.WriteLine("[ConfigService] 검�??�패: automation.p1.featureId ?�드가 비어?�습?�다.");
+            LoggingService.LogWarn("config.json 검증 실패: automation.p1.featureId 값이 비어 있습니다.");
             isValid = false;
         }
 
-        // Automation.P2.FeatureId 검�?(export_files)
         if (string.IsNullOrWhiteSpace(_current.Automation?.P2?.FeatureId))
         {
-            Console.WriteLine("[ConfigService] 검�??�패: automation.p2.featureId ?�드가 비어?�습?�다.");
+            LoggingService.LogWarn("config.json 검증 실패: automation.p2.featureId 값이 비어 있습니다.");
             isValid = false;
         }
 

@@ -1,6 +1,10 @@
+using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Input;
+using Lc_auto.Services;
 using Lc_auto.UI.Components;
 
 namespace Lc_auto.ViewModels;
@@ -10,6 +14,10 @@ namespace Lc_auto.ViewModels;
 /// </summary>
 public class MainViewModel : INotifyPropertyChanged
 {
+    private readonly IMediaService _mediaService;
+    private readonly IFolderService _folderService;
+    private readonly IConfigService _configService;
+
     /// <summary>
     /// 속성 변경 알림 이벤트
     /// </summary>
@@ -35,19 +43,19 @@ public class MainViewModel : INotifyPropertyChanged
     /// </summary>
     public ICommand ButtonDCommand { get; }
 
-    public MainViewModel()
+    public MainViewModel(
+        IMediaService mediaService,
+        IFolderService folderService,
+        IConfigService configService)
     {
-        // DialogService 사용 예제:
-        // DialogService.ShowDialog("오류", "파일을 찾을 수 없습니다.");
+        _mediaService = mediaService ?? throw new ArgumentNullException(nameof(mediaService));
+        _folderService = folderService ?? throw new ArgumentNullException(nameof(folderService));
+        _configService = configService ?? throw new ArgumentNullException(nameof(configService));
 
-        // ToastService 사용 예제:
-        // ToastService.Show("설정을 성공적으로 로드했습니다.", 3000);
-
-        // Command 초기화
-        ButtonACommand = new RelayCommand(() => LogInfo("버튼 A 클릭됨"));
-        ButtonBCommand = new RelayCommand(() => LogInfo("버튼 B 클릭됨"));
-        ButtonCCommand = new RelayCommand(() => LogInfo("버튼 C 클릭됨"));
-        ButtonDCommand = new RelayCommand(() => LogInfo("버튼 D 클릭됨"));
+        ButtonACommand = new AsyncRelayCommand(ExecuteButtonAAsync);
+        ButtonBCommand = new AsyncRelayCommand(ExecuteButtonBAsync);
+        ButtonCCommand = new AsyncRelayCommand(ExecuteButtonCAsync);
+        ButtonDCommand = new AsyncRelayCommand(ExecuteButtonDAsync);
     }
 
     /// <summary>
@@ -59,12 +67,73 @@ public class MainViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
-    /// <summary>
-    /// 로그 출력 플레이스홀더 메서드
-    /// </summary>
-    /// <param name="message">로그 메시지</param>
-    private void LogInfo(string message)
+    private Task ExecuteButtonAAsync()
     {
-        // TODO: Replace with LoggingService in Task 1.11
+        LoggingService.LogInfo("버튼 A 명령이 실행되었습니다.");
+        return Task.CompletedTask;
+    }
+
+    private Task ExecuteButtonBAsync()
+    {
+        LoggingService.LogInfo("버튼 B 명령이 실행되었습니다.");
+        return Task.CompletedTask;
+    }
+
+    private async Task ExecuteButtonCAsync()
+    {
+        try
+        {
+            var mediaConfig = _configService.Current.Media;
+
+            if (_mediaService.IsPlaying)
+            {
+                ToastService.Show("동영상이 이미 재생 중입니다.", 2000);
+                LoggingService.LogWarn("사용자가 동영상 재생을 요청했지만 이미 재생 중입니다.");
+                return;
+            }
+
+            var started = await _mediaService.PlayAsync(mediaConfig.VideoPath, mediaConfig.PlayerPath, CancellationToken.None);
+
+            if (started)
+            {
+                ToastService.Show("동영상 재생을 시작했습니다.", 3000);
+                LoggingService.LogInfo($"동영상 재생 명령이 성공적으로 실행되었습니다. videoPath={mediaConfig.VideoPath}");
+            }
+            else
+            {
+                DialogService.ShowDialog("동영상 재생 실패", "동영상 파일 또는 플레이어를 확인해주세요.");
+                LoggingService.LogWarn("동영상 재생 서비스가 실패 결과를 반환했습니다.");
+            }
+        }
+        catch (Exception ex)
+        {
+            LoggingService.LogError("동영상 재생 명령 실행 중 예외가 발생했습니다.", ex);
+            DialogService.ShowDialog("동영상 재생 실패", "동영상 재생 중 오류가 발생했습니다.");
+        }
+    }
+
+    private async Task ExecuteButtonDAsync()
+    {
+        try
+        {
+            var targetFolder = _configService.Current.Paths.TargetFolder;
+            var opened = await _folderService.OpenAsync(targetFolder, CancellationToken.None);
+
+            if (opened)
+            {
+                ToastService.Show("사진 저장 폴더를 열었습니다.", 3000);
+                LoggingService.LogInfo($"사진 저장 폴더 열기 명령이 성공적으로 실행되었습니다. targetFolder={targetFolder}");
+            }
+            else
+            {
+                DialogService.ShowDialog("폴더 열기 실패", "폴더를 열 수 없습니다. 경로를 확인해주세요.");
+                LoggingService.LogWarn("사진 저장 폴더 열기 서비스가 실패 결과를 반환했습니다.");
+            }
+        }
+        catch (Exception ex)
+        {
+            LoggingService.LogError("사진 저장 폴더 열기 명령 실행 중 예외가 발생했습니다.", ex);
+            DialogService.ShowDialog("폴더 열기 실패", "폴더를 여는 중 오류가 발생했습니다.");
+        }
     }
 }

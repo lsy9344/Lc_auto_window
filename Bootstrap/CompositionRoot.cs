@@ -22,9 +22,13 @@ public static class CompositionRoot
 
         var services = new ServiceCollection();
 
-        services.AddSingleton<IConfigService, ConfigService>();
+        services.AddSingleton<IAlertsScheduler, AlertsScheduler>();
+        services.AddSingleton<IConfigService>(sp => new ConfigService(sp.GetRequiredService<IAlertsScheduler>()));
         services.AddSingleton<ITopMostManager>(_ => new TopMostManager(mainWindow));
+        services.AddSingleton<IMediaService, MediaService>();
+        services.AddSingleton<IFolderService, FolderService>();
         services.AddSingleton<MainViewModel>();
+        services.AddSingleton<AlertsViewModel>();
 
         var serviceProvider = services.BuildServiceProvider();
         LoggingService.LogInfo("의존성 주입 구성이 완료되었습니다.");
