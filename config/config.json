@@ -1,0 +1,36 @@
+{
+  "media": {
+    "videoPath": "C:\\Media\\background_installation.mp4",
+    "playerPath": "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe"
+  },
+  "automation": {
+    "timeoutSec": 30,
+    "p1": {
+      "featureId": "start_photo",
+      "description": "Lightroom 촬영 시작 자동화"
+    },
+    "p2": {
+      "featureId": "export_files",
+      "description": "Lightroom 내보내기 자동화"
+    }
+  },
+  "paths": {
+    "targetFolder": "D:\\Photos\\Exports"
+  },
+  "alerts": [
+    {
+      "time": "09:00",
+      "message": "매일 오전 장비 점검을 진행하세요.",
+      "repeat": "daily"
+    },
+    {
+      "time": "18:30",
+      "message": "내보내기 완료 여부를 확인하고 백업을 시작하세요.",
+      "repeat": "daily"
+    }
+  ],
+  "ui": {
+    "alwaysOnTop": true,
+    "theme": "auto"
+  }
+}
