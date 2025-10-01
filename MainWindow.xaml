@@ -5,8 +5,12 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Lc_auto"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        Title="Lc_auto"
+        Height="300"
+        Width="400"
+        Topmost="True"
+        ResizeMode="CanMinimize">
+    <Grid Margin="20">
 
     </Grid>
 </Window>
