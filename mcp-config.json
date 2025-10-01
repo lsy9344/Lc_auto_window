@@ -1,11 +1,14 @@
 {
   "mcpServers": {
     "sequential-thinking": {
-      "command": "npx",
+      "command": "powershell.exe",
       "args": [
-        "-y",
-        "@modelcontextprotocol/server-sequential-thinking"
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "scripts/run-sequential-thinking.ps1"
       ]
     }
   }
-} 
+}

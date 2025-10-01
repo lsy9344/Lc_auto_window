@@ -22,9 +22,13 @@
       "Bash(tasklist)",
       "Bash(taskkill:*)",
       "Bash(pkill:*)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Read(//c/Users/KimYS/**)",
+      "Bash(if not exist Models mkdir Models)",
+      "Bash(if not exist:*)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "outputStyle": "default"
 }

@@ -11,6 +11,31 @@
         Topmost="True"
         ResizeMode="CanMinimize">
     <Grid Margin="20">
-
+        <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+            <Button Content="촬영 시작"
+                    AutomationProperties.AutomationId="ButtonA"
+                    Command="{Binding ButtonACommand}"
+                    Margin="0,5"
+                    Padding="10"
+                    Height="40"/>
+            <Button Content="내보내기"
+                    AutomationProperties.AutomationId="ButtonB"
+                    Command="{Binding ButtonBCommand}"
+                    Margin="0,5"
+                    Padding="10"
+                    Height="40"/>
+            <Button Content="배경지 설치 동영상 보기"
+                    AutomationProperties.AutomationId="ButtonC"
+                    Command="{Binding ButtonCCommand}"
+                    Margin="0,5"
+                    Padding="10"
+                    Height="40"/>
+            <Button Content="사진 저장 폴더 열기"
+                    AutomationProperties.AutomationId="ButtonD"
+                    Command="{Binding ButtonDCommand}"
+                    Margin="0,5"
+                    Padding="10"
+                    Height="40"/>
+        </StackPanel>
     </Grid>
 </Window>
