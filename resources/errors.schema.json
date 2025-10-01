@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/your-repo/lc_auto/errors.schema.json",
+  "title": "Lc_auto Error Messages Schema",
+  "description": "Schema for error message definitions",
+  "type": "object",
+  "required": ["version", "errors"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Error catalog version (SemVer)",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "errors": {
+      "type": "object",
+      "description": "Error definitions grouped by category",
+      "patternProperties": {
+        "^[a-z_]+$": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z_]+$": {
+              "type": "object",
+              "required": ["type", "logLevel", "logMessage"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "UI presentation type: dialog (blocks user), toast (info only), none (log only)",
+                  "enum": ["dialog", "toast", "none"]
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Dialog title (required if type=dialog)"
+                },
+                "message": {
+                  "type": "string",
+                  "description": "User-facing message (required if type=dialog or toast). Supports placeholders: {varName}"
+                },
+                "logLevel": {
+                  "type": "string",
+                  "description": "Serilog log level",
+                  "enum": ["INFO", "WARN", "ERROR"]
+                },
+                "logMessage": {
+                  "type": "string",
+                  "description": "Log message template. Supports placeholders: {varName}"
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": { "type": { "const": "dialog" } }
+                  },
+                  "then": {
+                    "required": ["title", "message"]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": { "type": { "const": "toast" } }
+                  },
+                  "then": {
+                    "required": ["message"]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

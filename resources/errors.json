@@ -1,0 +1,199 @@
+{
+  "$schema": "errors.schema.json",
+  "version": "1.0.0",
+  "errors": {
+    "config": {
+      "file_not_found": {
+        "type": "dialog",
+        "title": "오류",
+        "message": "설정 파일을 찾을 수 없습니다.\n기본 설정으로 시작합니다.\n\n경로: {path}",
+        "logLevel": "ERROR",
+        "logMessage": "Config file not found at {path}"
+      },
+      "parse_failed": {
+        "type": "toast",
+        "message": "설정 파일 형식이 올바르지 않습니다.\n이전 설정을 유지합니다.",
+        "logLevel": "ERROR",
+        "logMessage": "Config parsing failed at line {line}, column {column}: {error}"
+      },
+      "required_fields_missing": {
+        "type": "toast",
+        "message": "필수 설정이 누락되었습니다:\n- {missing_fields}\n\n해당 기능이 비활성화됩니다.",
+        "logLevel": "WARN",
+        "logMessage": "Required config fields missing: {fields}"
+      },
+      "video_path_invalid": {
+        "type": "dialog",
+        "title": "오류",
+        "message": "동영상 파일을 찾을 수 없습니다.\n\n경로: {videoPath}",
+        "logLevel": "WARN",
+        "logMessage": "Video file not found: {videoPath}"
+      },
+      "target_folder_invalid": {
+        "type": "dialog",
+        "title": "오류",
+        "message": "폴더를 찾을 수 없습니다.\n\n경로: {targetFolder}",
+        "logLevel": "WARN",
+        "logMessage": "Target folder not found: {targetFolder}"
+      },
+      "hot_reload_success": {
+        "type": "toast",
+        "message": "설정이 업데이트되었습니다.",
+        "logLevel": "INFO",
+        "logMessage": "Config reloaded successfully"
+      }
+    },
+    "automation": {
+      "lightroom_not_running": {
+        "type": "dialog",
+        "title": "오류",
+        "message": "Lightroom Classic이 실행되지 않았습니다.\n\nLightroom을 먼저 실행해 주세요.",
+        "logLevel": "ERROR",
+        "logMessage": "Lightroom Classic process not found"
+      },
+      "ui_element_not_found": {
+        "type": "dialog",
+        "title": "오류",
+        "message": "자동화 중 UI 요소를 찾지 못했습니다.\n\nLightroom 버전이 변경되었거나 UI가 준비되지 않았을 수 있습니다.\n\n자동화 ID: {featureId}",
+        "logLevel": "ERROR",
+        "logMessage": "UI element not found for featureId={featureId}, selector={selector}, retry={attempt}/2"
+      },
+      "interaction_failed": {
+        "type": "dialog",
+        "title": "오류",
+        "message": "자동화 중 오류가 발생했습니다.\n\n오류: {errorMessage}\n자동화 ID: {featureId}",
+        "logLevel": "ERROR",
+        "logMessage": "Automation interaction failed for featureId={featureId}: {exception}"
+      },
+      "lightroom_minimized": {
+        "type": "dialog",
+        "title": "오류",
+        "message": "Lightroom Classic이 최소화되거나 종료되었습니다.\n\n자동화를 중단합니다.",
+        "logLevel": "ERROR",
+        "logMessage": "Lightroom window lost focus or closed during automation for featureId={featureId}"
+      },
+      "timeout_exceeded": {
+        "type": "dialog",
+        "title": "오류",
+        "message": "자동화 작업 시간이 초과되었습니다.\n\nLightroom Classic이 응답하지 않거나 UI가 복잡할 수 있습니다.\n\n자동화 ID: {featureId}\n소요 시간: {elapsedSec}초",
+        "logLevel": "ERROR",
+        "logMessage": "Automation timeout exceeded for featureId={featureId}, elapsed={elapsedMs}ms"
+      },
+      "user_cancelled": {
+        "type": "none",
+        "logLevel": "INFO",
+        "logMessage": "User cancelled input form for featureId={featureId}"
+      },
+      "name_empty": {
+        "type": "dialog",
+        "title": "입력 오류",
+        "message": "예약자 성함을 입력해 주세요.",
+        "logLevel": "WARN",
+        "logMessage": "Name field is empty for featureId={featureId}"
+      },
+      "phone_invalid": {
+        "type": "dialog",
+        "title": "입력 오류",
+        "message": "휴대폰 뒤4자리는 정확히 4자리 숫자여야 합니다.\n\n입력값: {phoneInput}\n올바른 형식: 1234",
+        "logLevel": "WARN",
+        "logMessage": "Phone validation failed for featureId={featureId}, input={phoneInput}"
+      }
+    },
+    "media": {
+      "video_not_found": {
+        "type": "dialog",
+        "title": "오류",
+        "message": "동영상 파일을 찾을 수 없습니다.\n\n경로: {videoPath}",
+        "logLevel": "ERROR",
+        "logMessage": "Video file not found: {videoPath}"
+      },
+      "player_not_found": {
+        "type": "dialog",
+        "title": "오류",
+        "message": "동영상 플레이어를 찾을 수 없습니다.\n\n경로: {playerPath}\n\n설정을 확인하거나 빈 문자열로 설정하여 OS 기본 플레이어를 사용하세요.",
+        "logLevel": "ERROR",
+        "logMessage": "Custom player not found: {playerPath}"
+      },
+      "playback_failed": {
+        "type": "dialog",
+        "title": "오류",
+        "message": "동영상을 재생할 수 없습니다.\n\n오류: {errorMessage}",
+        "logLevel": "ERROR",
+        "logMessage": "Video playback failed: {exception}"
+      },
+      "already_playing": {
+        "type": "dialog",
+        "title": "알림",
+        "message": "동영상이 이미 재생 중입니다.\n\n재생을 완료한 후 다시 시도해 주세요.",
+        "logLevel": "WARN",
+        "logMessage": "Video playback already in progress"
+      }
+    },
+    "folder": {
+      "not_found": {
+        "type": "dialog",
+        "title": "오류",
+        "message": "폴더를 찾을 수 없습니다.\n\n경로: {targetFolder}\n\n경로를 확인해 주세요.",
+        "logLevel": "ERROR",
+        "logMessage": "Target folder not found: {targetFolder}"
+      },
+      "open_failed": {
+        "type": "dialog",
+        "title": "오류",
+        "message": "폴더를 열 수 없습니다.\n\n오류: {errorMessage}",
+        "logLevel": "ERROR",
+        "logMessage": "Failed to open folder: {exception}"
+      }
+    },
+    "topmost": {
+      "restore_failed": {
+        "type": "toast",
+        "message": "앱을 최상위로 복원하지 못했습니다.\n창을 수동으로 클릭해 주세요.",
+        "logLevel": "ERROR",
+        "logMessage": "Failed to restore TopMost after {retries} retries"
+      },
+      "lightroom_focus_failed": {
+        "type": "none",
+        "logLevel": "WARN",
+        "logMessage": "Failed to bring Lightroom to foreground, attempt {attempt}/3"
+      }
+    },
+    "alerts": {
+      "invalid_time_format": {
+        "type": "toast",
+        "message": "알림 시간 형식이 올바르지 않습니다.\n\n시간: {time}\n올바른 형식: HH:mm (예: 09:00)",
+        "logLevel": "ERROR",
+        "logMessage": "Invalid alert time format: {time}"
+      },
+      "schedule_failed": {
+        "type": "none",
+        "logLevel": "ERROR",
+        "logMessage": "Failed to schedule alert: {exception}"
+      }
+    },
+    "permissions": {
+      "uac_required": {
+        "type": "dialog",
+        "title": "권한 필요",
+        "message": "UI 자동화를 위해 관리자 권한이 필요합니다.\n\n관리자 권한으로 실행하시겠습니까?",
+        "logLevel": "WARN",
+        "logMessage": "UAC elevation required for UI automation"
+      },
+      "uac_denied": {
+        "type": "dialog",
+        "title": "오류",
+        "message": "관리자 권한이 거부되었습니다.\n\n자동화 기능을 사용할 수 없습니다.",
+        "logLevel": "ERROR",
+        "logMessage": "UAC elevation denied by user"
+      }
+    },
+    "system": {
+      "crash_recovery": {
+        "type": "toast",
+        "message": "이전 세션이 비정상 종료되었습니다.\n로그를 확인해 주세요.",
+        "logLevel": "ERROR",
+        "logMessage": "Application crashed: {lastError}"
+      }
+    }
+  }
+}
