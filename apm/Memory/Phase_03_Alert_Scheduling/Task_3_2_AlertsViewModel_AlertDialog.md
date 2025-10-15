@@ -22,8 +22,9 @@ important_findings: false
 - 생성: UI/AlertDialog.xaml, UI/AlertDialog.xaml.cs
 - 수정: Bootstrap/CompositionRoot.cs, App.xaml.cs
 
-## Issues
-- `dotnet build -p:EnableWindowsTargeting=true` 실행 시 `bash: line 1: dotnet: command not found`로 빌드 검증 불가.
+## Build / Verification
+- Command: `dotnet build -p:EnableWindowsTargeting=true`
+- Result: ✅ 성공 (경고 0개, 오류 0개) — .NET SDK 8.0.414 환경에서 정상 빌드 확인됨.
 
 ## Next Steps
-- dotnet CLI 설치 후 `dotnet build -p:EnableWindowsTargeting=true`로 컴파일 상태를 확인하세요.
+- Phase 3 완료. Phase 4 (Lightroom Automation) 진행 가능.

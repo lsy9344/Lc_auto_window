@@ -4,18 +4,28 @@
     "playerPath": "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe"
   },
   "automation": {
+    "lightroomPath": "C:\\Program Files\\Adobe\\Adobe Lightroom Classic\\Lightroom.exe",
+    "startupWaitSec": 5,
     "timeoutSec": 30,
     "p1": {
-      "featureId": "start_photo",
+      "featureId": "Lightroom.StartPhotoSession",
       "description": "Lightroom 촬영 시작 자동화"
     },
     "p2": {
-      "featureId": "export_files",
+      "featureId": "Lightroom.ExportPhotos",
       "description": "Lightroom 내보내기 자동화"
     }
   },
+  "camera": {
+    "shutter": "10",
+    "aperture": "10",
+    "iso": "400",
+    "whiteBalance": "자동"
+  },
   "paths": {
-    "targetFolder": "D:\\Photos\\Exports"
+    "targetFolder": "D:\\Photos\\Exports",
+    "shootFolder": "C:\\dabi_shoot",
+    "exportFolder": "C:\\사진저장폴더"
   },
   "alerts": [
     {

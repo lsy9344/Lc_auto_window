@@ -14,16 +14,18 @@
         WindowStyle="ToolWindow"
         Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
     <Grid>
-        <StackPanel Padding="24" Spacing="18">
-            <TextBlock Text="{Binding CurrentMessage}"
-                       TextWrapping="Wrap"
-                       FontSize="16"
-                       Margin="0,0,0,12"/>
-            <Button Content="확인"
-                    Width="90"
-                    HorizontalAlignment="Right"
-                    IsDefault="True"
-                    Click="OnOkClick"/>
-        </StackPanel>
+        <Border Padding="24">
+            <StackPanel>
+                <TextBlock Text="{Binding CurrentMessage}"
+                           TextWrapping="Wrap"
+                           FontSize="16"
+                           Margin="0,0,0,12"/>
+                <Button Content="확인"
+                        Width="90"
+                        HorizontalAlignment="Right"
+                        IsDefault="True"
+                        Click="OnOkClick"/>
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

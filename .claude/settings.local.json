@@ -25,7 +25,11 @@
       "Bash(kill:*)",
       "Read(//c/Users/KimYS/**)",
       "Bash(if not exist Models mkdir Models)",
-      "Bash(if not exist:*)"
+      "Bash(if not exist:*)",
+      "Bash(dotnet --version)",
+      "Bash(dotnet build:*)",
+      "mcp__sequential-thinking__sequentialthinking",
+      "Bash(wmic:*)"
     ],
     "deny": [],
     "ask": []

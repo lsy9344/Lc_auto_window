@@ -1,31 +1,34 @@
 # Lc_auto
 
-Windows 전용 Lightroom Classic 자동화 런처 애플리케이션
+Lightroom Classic 자동화 워크플로우를 위한 Windows WPF (.NET 8) 런처 애플리케이션
 
-## 개요
+## 📋 개요
 
-Lc_auto는 사진 스튜디오 워크플로우를 위한 작고 가벼운 런처 앱입니다. 항상 최상위에 표시되며, 다음 기능을 제공합니다:
+Lc_auto는 사진 스튜디오 워크플로우를 자동화하기 위한 작고 가벼운 Windows 전용 애플리케이션입니다. 항상 최상위에 표시되며, 다음 기능을 제공합니다:
 
-- **촬영 시작 자동화** (버튼 a): 고객 정보 입력 후 Lightroom Classic에서 촬영 세션 시작
-- **내보내기 자동화** (버튼 b): 고객 정보 입력 후 Lightroom Classic에서 사진 내보내기
-- **배경지 설치 동영상 재생** (버튼 c): 고객을 위한 안내 동영상 재생
-- **사진 저장 폴더 열기** (버튼 d): Windows 탐색기로 출력 폴더 열기
-- **예약 알림 팝업**: 설정된 시간에 자동으로 알림 표시
+- **촬영 시작 자동화** (버튼 A): 고객 정보 입력 후 Lightroom Classic에서 촬영 세션 자동 시작
+- **내보내기 자동화** (버튼 B): 고객 정보 입력 후 Lightroom Classic에서 사진 자동 내보내기
+- **배경지 설치 동영상 재생** (버튼 C): 고객을 위한 안내 동영상 재생
+- **사진 저장 폴더 열기** (버튼 D): Windows 탐색기로 출력 폴더 열기
+- **예약 알림 팝업**: 설정된 시간(HH:mm)에 자동으로 모달 알림 표시
 
-## 주요 특징
+## ✨ 주요 특징
 
-- **항상 최상위 유지**: 앱은 기본적으로 다른 창 위에 표시되며, 자동화 실행 시 Lightroom에 포커스를 양보한 후 자동 복귀
+- **항상 최상위 유지**: 앱은 기본적으로 다른 창 위에 표시되며, 자동화 실행 시 Lightroom에 포커스를 양보한 후 자동 복귀 (재시도 정책 포함)
+- **FlaUI 기반 자동화**: FlaUI v4.0.0으로 Lightroom Classic UI 제어 (타임아웃 30초, 최대 3회 재시도)
+- **입력값 검증**: 예약자 성함, 휴대폰 뒤4자리 입력 시 실시간 검증 (한국어 UI)
 - **설정 기반 동작**: `config/config.json` 파일로 모든 동작 제어
-- **핫 리로드**: 설정 파일 변경 시 앱 재시작 없이 즉시 반영
-- **단일 실행 파일**: 설치 불필요, exe 파일만으로 실행 가능
-- **관리자 권한 불필요**: 일반 사용자 권한으로 실행
+- **핫 리로드**: 설정 파일 변경 시 앱 재시작 없이 즉시 반영 (FileSystemWatcher)
+- **단일 실행 파일**: 설치 불필요, self-contained exe 파일만으로 실행 가능
+- **관리자 권한 불필요**: 일반 사용자 권한으로 실행 (UI Automation 필요 시만 UAC 프롬프트)
 
-## 시스템 요구사항
+## 💻 시스템 요구사항
 
-- **OS**: Windows 10 이상
+- **OS**: Windows 10/11
 - **아키텍처**: x64
-- **필수 소프트웨어**: Lightroom Classic (자동화 기능 사용 시)
+- **필수 소프트웨어**: Adobe Lightroom Classic (자동화 기능 사용 시)
 - **.NET**: .NET 8 Runtime (self-contained 빌드 시 불필요)
+- **개발 환경**: .NET SDK 8.0 이상 (빌드 시)
 
 ## 설치
 
@@ -72,12 +75,12 @@ Lc_auto는 사진 스튜디오 워크플로우를 위한 작고 가벼운 런처
 
 ### 설정 항목 설명
 
-- **media.videoPath**: 재생할 동영상 파일 경로 (버튼 c)
+- **media.videoPath**: 재생할 동영상 파일 경로 (버튼 C)
 - **media.playerPath**: 사용할 동영상 플레이어 경로 (빈 문자열이면 OS 기본 플레이어 사용)
-- **automation.p1/p2**: 자동화 기능 ID (Lightroom Classic UI 요소와 매핑)
-- **automation.timeoutSec**: 자동화 시도당 타임아웃 (초 단위, 최대 2회 재시도)
-- **paths.targetFolder**: 버튼 d로 열 폴더 경로
-- **alerts**: 예약 알림 배열 (시간 HH:mm 형식, 메시지, 반복 설정)
+- **automation.p1/p2**: 자동화 기능 ID (Lightroom Classic UI 요소와 매핑, 현재 `start_photo`/`export_files`로 변경됨)
+- **automation.timeoutSec**: 자동화 시도당 타임아웃 (초 단위, 최대 2회 재시도 = 총 3회 시도)
+- **paths.targetFolder**: 버튼 D로 열 폴더 경로
+- **alerts**: 예약 알림 배열 (시간 HH:mm 형식, 메시지, 반복 설정: "daily"/"once")
 - **ui.alwaysOnTop**: 항상 최상위 표시 여부 (항상 true 권장)
 - **ui.theme**: UI 테마 ("auto", "light", "dark")
 
@@ -112,9 +115,43 @@ Lc_auto는 사진 스튜디오 워크플로우를 위한 작고 가벼운 런처
 ## 문제 해결
 
 ### 자동화가 실행되지 않음
-- Lightroom Classic이 실행 중인지 확인
-- `config.json`의 `featureId`가 올바르게 설정되었는지 확인
-- 로그 파일에서 오류 메시지 확인
+
+**증상**: "자동화 스크립트를 찾을 수 없습니다" 에러
+
+**원인**: `Services/Automation/FeatureSelectorRegistry.cs`의 스크립트가 플레이스홀더(템플릿) 상태입니다.
+
+**해결**:
+1. **FlaUI Inspect 도구 다운로드**
+   ```
+   https://github.com/FlaUI/FlaUI/releases
+   → FlaUIInspect.zip 다운로드
+   ```
+
+2. **Lightroom Classic UI 요소 식별**
+   - Adobe Lightroom Classic 실행
+   - FlaUIInspect.exe 실행 (관리자 권한 권장)
+   - Hover Mode로 UI 요소 선택 (Ctrl 클릭)
+   - AutomationId, Name, ClassName, ControlType 확인
+
+3. **스크립트 수정**
+   - `Services/Automation/FeatureSelectorRegistry.cs` 파일 열기
+   - TODO 주석 부분을 FlaUI Inspect에서 확인한 실제 값으로 교체
+   - 예시:
+     ```csharp
+     // 수정 전 (템플릿)
+     Name = "File",  // TODO: 실제 값 확인
+
+     // 수정 후 (실제 값)
+     AutomationId = "mnuFile",  // FlaUI Inspect에서 확인
+     Name = "파일"              // 한국어 Lightroom
+     ```
+
+4. **상세 가이드**: [`docs/LightroomUIAutomationGuide.md`](docs/LightroomUIAutomationGuide.md) 참조
+
+**기타 원인**:
+- Lightroom Classic이 실행 중이지 않음 → 실행 확인
+- 창 제목이 다름 → `Services/WindowFocusService.cs`의 `LightroomWindowTitles` 배열 확인
+- 로그 파일에서 자세한 오류 메시지 확인 (`log/Lc_auto-*.log`)
 
 ### 동영상이 재생되지 않음
 - `media.videoPath`가 유효한 파일 경로인지 확인
@@ -129,15 +166,29 @@ Lc_auto는 사진 스튜디오 워크플로우를 위한 작고 가벼운 런처
 - `config.json`의 `ui.alwaysOnTop`이 `true`로 설정되었는지 확인
 - 로그에서 TopMost 복원 실패 메시지 확인
 
-## 개발
+## 🛠️ 개발
 
-자세한 개발 문서는 `docs/` 폴더를 참조하세요:
+### 개발 문서
 
-- **PRD.md**: 제품 요구사항 정의
-- **Specifications.md**: 기술 사양
-- **Architecture.md**: 아키텍처 설계
-- **UserStories.md**: 사용자 시나리오
-- **CLAUDE.md**: AI 개발 가이드
+`docs/` 폴더에서 상세 문서를 확인하세요:
+
+- **[PRD.md](docs/PRD.md)**: 제품 요구사항 정의 (Korean)
+- **[Architecture.md](docs/Architecture.md)**: 아키텍처 설계 (Korean)
+- **[Specifications.md](docs/Specifications.md)**: 기술 사양 (English)
+- **[LightroomUIAutomationGuide.md](docs/LightroomUIAutomationGuide.md)**: Lightroom UI 자동화 가이드 ⭐
+- **[ErrorHandling.md](docs/ErrorHandling.md)**: 에러 처리 정책 (Korean)
+- **[TestStrategy.md](docs/TestStrategy.md)**: 테스트 전략 (Korean/English)
+- **[CLAUDE.md](CLAUDE.md)**: AI 개발 가이드
+
+### 구현 현황
+
+✅ **Phase 1-4 모두 완료 (100%)**
+- Phase 1: 프로젝트 기초 및 핵심 인프라 (10/10)
+- Phase 2: 미디어 재생 및 폴더 열기 (3/3)
+- Phase 3: 알림 스케줄링 (3/3)
+- Phase 4: Lightroom 자동화 (7/7)
+
+**빌드 상태**: ✅ 성공 (경고 0, 오류 0)
 
 ### 빌드 방법
 
@@ -155,9 +206,37 @@ dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 ### 기술 스택
 
 - **.NET 8** (C# WPF)
-- **FlaUI** (UI 자동화)
-- **ModernWpf** (UI 테마)
-- **Serilog** (로깅)
+- **FlaUI v4.0.0** (UI 자동화 - UIA3)
+- **ModernWpf v0.9.6** (UI 테마)
+- **Serilog v3.1.1** + Serilog.Sinks.File v5.0.0 (로깅, rolling file)
+- **Microsoft.Extensions.DependencyInjection v8.0.0** (DI 컨테이너)
+
+### 아키텍처
+
+**MVVM + Service Layer + Config-Driven**
+
+```
+UI Layer (WPF)
+  ├─ MainWindow.xaml
+  ├─ InputFormDialog.xaml
+  └─ AlertDialog.xaml
+
+ViewModels
+  ├─ MainViewModel
+  ├─ InputFormViewModel
+  └─ AlertsViewModel
+
+Services
+  ├─ ConfigService (Hot Reload)
+  ├─ TopMostManager (Always-On-Top + Focus Handoff)
+  ├─ WindowFocusService (Lightroom ↔ App)
+  ├─ AutomationService (FlaUI)
+  ├─ FeatureSelectorRegistry (Script Mapping)
+  ├─ AlertsScheduler (Time-based Alerts)
+  ├─ MediaService (Video Playback)
+  ├─ FolderService (Explorer Integration)
+  └─ LoggingService (Serilog)
+```
 
 ## 라이선스
 
@@ -167,6 +246,33 @@ dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 
 이슈 및 개선 제안은 GitHub Issues를 통해 제출해 주세요.
 
+## 🚧 알려진 제한 사항
+
+1. **Lightroom Classic UI 스크립트**: 현재 템플릿 상태이며 FlaUI Inspect로 실제 UI 요소를 식별하여 수정 필요
+2. **Lightroom 버전 의존성**: UI 구조가 버전별로 다를 수 있어 스크립트 업데이트 필요
+3. **Windows 전용**: macOS/Linux 지원 없음 (WPF/Win32 API 사용)
+4. **언어 설정**: Lightroom Classic UI 언어에 따라 스크립트 Name 값 조정 필요 (AutomationId 우선 사용 권장)
+
+## 📦 패키지 의존성
+
+```xml
+<PackageReference Include="FlaUI.UIA3" Version="4.0.0" />
+<PackageReference Include="ModernWpfUI" Version="0.9.6" />
+<PackageReference Include="Serilog" Version="3.1.1" />
+<PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+```
+
+## 🔗 추가 리소스
+
+- **FlaUI GitHub**: https://github.com/FlaUI/FlaUI
+- **FlaUI 문서**: https://github.com/FlaUI/FlaUI/wiki
+- **프로젝트 메모리**: `apm/Memory/` (개발 이력 및 태스크 로그)
+
 ## 변경 이력
 
 최신 변경 사항은 [Releases](https://github.com/your-repo/releases) 페이지를 참조하세요.
+
+---
+
+**Made with .NET 8 + WPF + FlaUI**

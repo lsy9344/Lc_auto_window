@@ -63,8 +63,7 @@ public class ConfigService : IConfigService
 
             _current = config;
 
-            var alerts = _current.Alerts ?? Array.Empty<AlertConfig>();
-            _alertsScheduler.Apply(alerts);
+            _alertsScheduler.Apply(_current.Alerts);
             _alertsScheduler.Start();
 
             if (!ValidateConfig())

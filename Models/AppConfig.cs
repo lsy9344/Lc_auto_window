@@ -21,6 +21,12 @@ public class AppConfig
     public AutomationConfig Automation { get; set; } = new();
 
     /// <summary>
+    /// Lightroom Classic 카메라 설정
+    /// </summary>
+    [JsonPropertyName("camera")]
+    public CameraConfig Camera { get; set; } = new();
+
+    /// <summary>
     /// 파일 시스템 경로 설정
     /// </summary>
     [JsonPropertyName("paths")]

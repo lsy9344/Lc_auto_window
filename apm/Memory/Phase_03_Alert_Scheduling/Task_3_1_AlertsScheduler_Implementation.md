@@ -21,7 +21,7 @@ important_findings: false
 
 ## Build / Verification
 - Command: `dotnet build -p:EnableWindowsTargeting=true`
-- Result: 실패 (dotnet: command not found) — 로컬 환경에 .NET SDK 부재로 추정.
+- Result: ✅ 성공 (경고 0개, 오류 0개) — .NET SDK 8.0.414 환경에서 정상 빌드 확인됨.
 
 ## Follow-ups / Risks
 - .NET SDK 설치 후 빌드 및 경고 확인 필요.

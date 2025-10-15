@@ -1,5 +1,6 @@
 using System;
 using System.Windows;
+using System.Windows.Interop;
 using Lc_auto.Bootstrap;
 using Lc_auto.Services;
 using Lc_auto.ViewModels;
@@ -47,6 +48,11 @@ public partial class App : Application
         LoggingService.LogInfo("애플리케이션이 시작되었습니다.");
 
         mainWindow.Show();
+
+        // WindowFocusService에 MainWindow 핸들 설정
+        var windowFocusService = _serviceProvider.GetRequiredService<IWindowFocusService>();
+        var windowHandle = new WindowInteropHelper(mainWindow).Handle;
+        windowFocusService.SetAppWindowHandle(windowHandle);
     }
 
     /// <summary>

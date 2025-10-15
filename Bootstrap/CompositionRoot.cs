@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using Lc_auto.Services;
+using Lc_auto.Services.Automation;
 using Lc_auto.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -24,7 +25,11 @@ public static class CompositionRoot
 
         services.AddSingleton<IAlertsScheduler, AlertsScheduler>();
         services.AddSingleton<IConfigService>(sp => new ConfigService(sp.GetRequiredService<IAlertsScheduler>()));
-        services.AddSingleton<ITopMostManager>(_ => new TopMostManager(mainWindow));
+        services.AddSingleton<IWindowFocusService, WindowFocusService>();
+        services.AddSingleton<IAutomationService, AutomationService>();
+        services.AddSingleton<ITopMostManager>(sp => new TopMostManager(
+            mainWindow,
+            sp.GetRequiredService<IWindowFocusService>()));
         services.AddSingleton<IMediaService, MediaService>();
         services.AddSingleton<IFolderService, FolderService>();
         services.AddSingleton<MainViewModel>();

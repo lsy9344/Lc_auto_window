@@ -12,4 +12,16 @@ public class PathsConfig
     /// </summary>
     [JsonPropertyName("targetFolder")]
     public string TargetFolder { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 촬영 파일 저장 폴더 경로 (촬영 시작 자동화에 사용)
+    /// </summary>
+    [JsonPropertyName("shootFolder")]
+    public string ShootFolder { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 내보내기 저장 폴더 경로 (내보내기 자동화에 사용)
+    /// </summary>
+    [JsonPropertyName("exportFolder")]
+    public string ExportFolder { get; set; } = string.Empty;
 }

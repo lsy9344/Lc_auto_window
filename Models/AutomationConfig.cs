@@ -8,6 +8,18 @@ namespace Lc_auto.Models;
 public class AutomationConfig
 {
     /// <summary>
+    /// Lightroom Classic 실행 파일 절대 경로
+    /// </summary>
+    [JsonPropertyName("lightroomPath")]
+    public string LightroomPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Lightroom 실행 후 대기 시간 (초 단위)
+    /// </summary>
+    [JsonPropertyName("startupWaitSec")]
+    public int StartupWaitSec { get; set; } = 5;
+
+    /// <summary>
     /// 버튼 a (촬영 시작) 자동화 설정
     /// </summary>
     [JsonPropertyName("p1")]

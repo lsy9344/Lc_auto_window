@@ -14,14 +14,39 @@ public static class LoggingService
     /// </summary>
     static LoggingService()
     {
+        try
+        {
+            // log 디렉토리가 없으면 생성
+            if (!System.IO.Directory.Exists("log"))
+            {
+                System.IO.Directory.CreateDirectory("log");
+            }
+
+            // 오늘 날짜의 로그 파일 경로를 생성하고, 존재하면 삭제합니다.
+            // 이렇게 하면 프로그램 시작 시 항상 새로운 로그 파일에 기록됩니다.
+            var todayLogFileName = $"Lc_auto-{DateTime.Now:yyyyMMdd}.log";
+            var todayLogFilePath = System.IO.Path.Combine("log", todayLogFileName);
+
+            if (System.IO.File.Exists(todayLogFilePath))
+            {
+                System.IO.File.Delete(todayLogFilePath);
+            }
+        }
+        catch
+        {
+            // 파일 조작 실패 시 무시 (이어서 로깅 시작)
+        }
+
+        // Serilog 설정
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .WriteTo.File(
                 path: "log/Lc_auto-.log",
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 7,
-                fileSizeLimitBytes: 50_000_000,
-                rollOnFileSizeLimit: true
+                fileSizeLimitBytes: 50 * 1024 * 1024, // 50MB
+                rollOnFileSizeLimit: true,
+                shared: true // 여러 프로세스에서 접근 가능하도록 설정
             )
             .CreateLogger();
 

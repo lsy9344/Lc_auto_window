@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Lc_auto.Services;
+using Lc_auto.Services.Automation;
+using Lc_auto.UI;
 using Lc_auto.UI.Components;
 
 namespace Lc_auto.ViewModels;
@@ -17,6 +20,8 @@ public class MainViewModel : INotifyPropertyChanged
     private readonly IMediaService _mediaService;
     private readonly IFolderService _folderService;
     private readonly IConfigService _configService;
+    private readonly IAutomationService _automationService;
+    private readonly ITopMostManager _topMostManager;
 
     /// <summary>
     /// 속성 변경 알림 이벤트
@@ -46,11 +51,15 @@ public class MainViewModel : INotifyPropertyChanged
     public MainViewModel(
         IMediaService mediaService,
         IFolderService folderService,
-        IConfigService configService)
+        IConfigService configService,
+        IAutomationService automationService,
+        ITopMostManager topMostManager)
     {
         _mediaService = mediaService ?? throw new ArgumentNullException(nameof(mediaService));
         _folderService = folderService ?? throw new ArgumentNullException(nameof(folderService));
         _configService = configService ?? throw new ArgumentNullException(nameof(configService));
+        _automationService = automationService ?? throw new ArgumentNullException(nameof(automationService));
+        _topMostManager = topMostManager ?? throw new ArgumentNullException(nameof(topMostManager));
 
         ButtonACommand = new AsyncRelayCommand(ExecuteButtonAAsync);
         ButtonBCommand = new AsyncRelayCommand(ExecuteButtonBAsync);
@@ -67,16 +76,124 @@ public class MainViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
-    private Task ExecuteButtonAAsync()
+    private async Task ExecuteButtonAAsync()
     {
-        LoggingService.LogInfo("버튼 A 명령이 실행되었습니다.");
-        return Task.CompletedTask;
+        LoggingService.LogInfo("버튼 A (촬영 시작) 명령이 실행되었습니다.");
+
+        try
+        {
+            // 1. 입력 폼 다이얼로그 표시
+            var inputDialog = new InputFormDialog("촬영 시작");
+            bool? dialogResult = inputDialog.ShowDialog();
+
+            if (dialogResult != true)
+            {
+                LoggingService.LogInfo("사용자가 입력 폼을 취소했습니다.");
+                return;
+            }
+
+            // 2. 입력값 조합 (검증은 InputFormDialog에서 이미 완료됨)
+            var name = inputDialog.ViewModel.Name;
+            var phone = inputDialog.ViewModel.Phone;
+            var customerInput = $"{name}{phone}"; // 공백/구분자 없음 (예: "홍길동1234")
+
+            LoggingService.LogInfo($"입력값 조합 완료: {customerInput}");
+
+            // 3. 자동화 실행 (Lightroom 포커스 핸드오프 포함)
+            var inputValues = new Dictionary<string, string>
+            {
+                ["customerInput"] = customerInput,
+                ["shootFolder"] = _configService.Current.Paths?.ShootFolder ?? "C:\\dabi_shoot",
+                ["exportFolder"] = _configService.Current.Paths?.ExportFolder ?? "C:\\사진저장폴더"
+            };
+
+            var cts = new CancellationTokenSource();
+            bool success = await _topMostManager.HandOffToLightroomAsync(async () =>
+            {
+                var result = await _automationService.RunAsync("Lightroom.StartPhotoSession", inputValues, cts.Token);
+
+                if (!result.Success)
+                {
+                    throw new InvalidOperationException($"자동화 실패: {result.Message}");
+                }
+            }, cts.Token);
+
+            if (success)
+            {
+                ToastService.Show("촬영 시작 자동화가 완료되었습니다.", 3000);
+                LoggingService.LogInfo("촬영 시작 자동화가 성공적으로 완료되었습니다.");
+            }
+            else
+            {
+                DialogService.ShowDialog("자동화 실패", "촬영 시작 자동화에 실패했습니다. 로그를 확인하세요.");
+                LoggingService.LogWarn("촬영 시작 자동화가 실패했습니다.");
+            }
+        }
+        catch (Exception ex)
+        {
+            LoggingService.LogWarn($"촬영 시작 명령 실행 중 오류 발생: {ex.Message}", ex);
+            DialogService.ShowDialog("오류 발생", "촬영 시작 중 오류가 발생했습니다.");
+        }
     }
 
-    private Task ExecuteButtonBAsync()
+    private async Task ExecuteButtonBAsync()
     {
-        LoggingService.LogInfo("버튼 B 명령이 실행되었습니다.");
-        return Task.CompletedTask;
+        LoggingService.LogInfo("버튼 B (내보내기) 명령이 실행되었습니다.");
+
+        try
+        {
+            // 1. 입력 폼 다이얼로그 표시
+            var inputDialog = new InputFormDialog("내보내기 시작");
+            bool? dialogResult = inputDialog.ShowDialog();
+
+            if (dialogResult != true)
+            {
+                LoggingService.LogInfo("사용자가 입력 폼을 취소했습니다.");
+                return;
+            }
+
+            // 2. 입력값 조합 (검증은 InputFormDialog에서 이미 완료됨)
+            var name = inputDialog.ViewModel.Name;
+            var phone = inputDialog.ViewModel.Phone;
+            var customerInput = $"{name}{phone}"; // 공백/구분자 없음 (예: "홍길동1234")
+
+            LoggingService.LogInfo($"입력값 조합 완료: {customerInput}");
+
+            // 3. 자동화 실행 (Lightroom 포커스 핸드오프 포함)
+            var inputValues = new Dictionary<string, string>
+            {
+                ["customerInput"] = customerInput,
+                ["shootFolder"] = _configService.Current.Paths?.ShootFolder ?? "C:\\dabi_shoot",
+                ["exportFolder"] = _configService.Current.Paths?.ExportFolder ?? "C:\\사진저장폴더"
+            };
+
+            var cts = new CancellationTokenSource();
+            bool success = await _topMostManager.HandOffToLightroomAsync(async () =>
+            {
+                var result = await _automationService.RunAsync("Lightroom.ExportPhotos", inputValues, cts.Token);
+
+                if (!result.Success)
+                {
+                    throw new InvalidOperationException($"자동화 실패: {result.Message}");
+                }
+            }, cts.Token);
+
+            if (success)
+            {
+                ToastService.Show("내보내기 자동화가 완료되었습니다.", 3000);
+                LoggingService.LogInfo("내보내기 자동화가 성공적으로 완료되었습니다.");
+            }
+            else
+            {
+                DialogService.ShowDialog("자동화 실패", "내보내기 자동화에 실패했습니다. 로그를 확인하세요.");
+                LoggingService.LogWarn("내보내기 자동화가 실패했습니다.");
+            }
+        }
+        catch (Exception ex)
+        {
+            LoggingService.LogWarn($"내보내기 명령 실행 중 오류 발생: {ex.Message}", ex);
+            DialogService.ShowDialog("오류 발생", "내보내기 중 오류가 발생했습니다.");
+        }
     }
 
     private async Task ExecuteButtonCAsync()
