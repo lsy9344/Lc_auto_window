@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Lc_auto.Services.Automation;
 
@@ -56,7 +57,8 @@ public static class FeatureSelectorRegistry
                         ClassName = "#32768",
                         ControlType = "Menu"
                     },
-                    Action = "WaitForElement"
+                    Action = "Wait",
+                    ActionData = "500"
                 },
 
                 new AutomationStep
@@ -79,7 +81,8 @@ public static class FeatureSelectorRegistry
                         ClassName = "#32768",
                         ControlType = "Menu"
                     },
-                    Action = "WaitForElement"
+                    Action = "Wait",
+                    ActionData = "500"
                 },
 
                 new AutomationStep
@@ -102,9 +105,128 @@ public static class FeatureSelectorRegistry
                         Name = "연결전송된 촬영 설정",
                         ClassName = "Afx:0000000140000000:0",
                         ControlType = "Window"
-                     },
-                    Action = "WaitForElement"
+                    },
+                    Action = "Wait",
+                    ActionData = "1000"
 
+                },
+
+                new AutomationStep
+                {
+                    Description = "7. 세션 이름 입력창에 붙여넣기",
+                    Selector = new UiaSelector
+                    {
+                        AutomationId = "65535",
+                        Name = "세션 이름:",
+                        ControlType = "Edit"
+                    },
+                    Action = "ClearAndType",
+                    ActionData = "{customerInput}"
+                },
+
+                new AutomationStep
+                {
+                    Description = "8. '숏별로 사진 나누기' 체크박스 해제",
+                    Selector = new UiaSelector
+                    {
+                        Name = "숏별로 사진 나누기",
+                        ControlType = "CheckBox"
+                    },
+                    Action = "ToggleCheckBox",
+                    ActionData = "off"
+                },
+
+                new AutomationStep
+                {
+                    Description = "9. 사용자 정의 이름 템플릿 콤보박스 선택",
+                    Selector = new UiaSelector
+                    {
+                        AutomationId = "2134",
+                        Name = "템플릿:",
+                        ControlType = "ComboBox"
+                    },
+                    Action = "Click"
+                },
+
+                new AutomationStep
+                {
+                    Description = "10. 사용자 정의 이름 템플릿 드롭다운 확인",
+                    Selector = new UiaSelector
+                    {
+                        Name = "컨텍스트",
+                        ClassName = "#32768",
+                        ControlType = "Menu"
+                    },
+                    Action = "Wait",
+                    ActionData = "500"
+                },
+
+                new AutomationStep
+                {
+                    Description = "11. 콤보박스에서 원본 파일 번호 선택",
+                    Selector = new UiaSelector
+                    {
+                        AutomationId = "3",
+                        Name = "사용자 정의 이름 - 원본 파일 번호",
+                        ControlType = "MenuItem"
+                    },
+                    Action = "Click"
+                },
+
+                new AutomationStep
+                {
+                    Description = "12. '원본' 텍스트 입력",
+                    Selector = new UiaSelector
+                    {
+                        AutomationId = "2136",
+                        Name = "사용자 정의 텍스트:",
+                        ControlType = "Edit"
+                    },
+                    Action = "ClearAndType",
+                    ActionData = "원본"
+                },
+
+                new AutomationStep
+                {
+                    Description = "13. 경로 '선택...' 버튼 클릭",
+                    Selector = new UiaSelector
+                    {
+                        AutomationId = "65535",
+                        Name = "선택...",
+                        ControlType = "Button"
+                    },
+                    Action = "Click"
+                },
+
+                new AutomationStep
+                {
+                    Description = "14. 폴더 선택 윈도우 확인",
+                    Selector = new UiaSelector
+                    {
+                        Name = "폴더 선택",
+                        ClassName = "#32770",
+                        ControlType = "Window"
+                    },
+                    Action = "WaitForFolderDialog"
+                },
+
+                new AutomationStep
+                {
+                    Description = "15. 주소창 클릭하여 경로 붙여넣기",
+                    Selector = new UiaSelector
+                    {
+                        AutomationId = "1001",
+                        ClassName = "ToolbarWindow32",
+                        ControlType = "ToolBar"
+                    },
+                    Action = "SendKeys",
+                    ActionData = "{targetFolder}"
+                },
+
+                new AutomationStep
+                {
+                    Description = "16. 카메라 오류 확인 (2초간 체크)",
+                    Action = "CheckCameraErrors"
                 },
 
             ]
@@ -112,57 +234,125 @@ public static class FeatureSelectorRegistry
     }
 
     /// <summary>
-    /// featureId에 해당하는 자동화 스크립트를 가져옵니다.
+    /// 사진 내보내기 자동화 스크립트 등록
+    /// FlaUIInspectData.md의 내보내기 매니저 섹션 기반으로 완전히 재작성
     /// </summary>
-    /// <param name="featureId">기능 식별자 (예: "Lightroom.StartPhotoSession")</param>
-    /// <returns>스크립트가 존재하면 반환, 없으면 null</returns>
-    public static FeatureScript? Get(string featureId)
+    private static void RegisterExportPhotosScript()
     {
-        if (string.IsNullOrWhiteSpace(featureId))
+        RegisterScript("Lightroom.ExportPhotos", new FeatureScript
         {
-            LoggingService.LogWarn("빈 featureId로 Get() 호출됨");
-            return null;
-        }
-
-        if (_registry.TryGetValue(featureId, out var script))
-        {
-            LoggingService.LogInfo($"FeatureScript 조회 성공: {featureId}");
-            return script;
-        }
-
-        LoggingService.LogWarn($"FeatureScript를 찾을 수 없음: {featureId}");
-        return null;
+            FeatureId = "Lightroom.ExportPhotos",
+            Description = "사진 내보내기 자동화",
+            Steps =
+            [
+                new AutomationStep
+                {
+                    Description = "1. 왼쪽 상단 파일 메뉴 클릭",
+                    Selector = new UiaSelector
+                    {
+                        Name = "파일(F)",
+                        ControlType = "MenuItem"
+                    },
+                    Action = "Click"
+                },
+                new AutomationStep
+                {
+                    Description = "2. 메뉴 드롭다운 확인",
+                    Selector = new UiaSelector
+                    {
+                        Name = "파일(F)",
+                        ClassName = "#32768",
+                        ControlType = "Menu"
+                    },
+                    Action = "Wait",
+                    ActionData = "500"
+                },
+                new AutomationStep
+                {
+                    Description = "3. 내보내기 메뉴 클릭",
+                    Selector = new UiaSelector
+                    {
+                        Name = "내보내기",
+                        ControlType = "MenuItem"
+                    },
+                    Action = "Click"
+                },
+                new AutomationStep
+                {
+                    Description = "4. 내보내기 드롭다운 확인",
+                    Selector = new UiaSelector
+                    {
+                        Name = "파일(F)",
+                        ClassName = "#32768",
+                        ControlType = "Menu"
+                    },
+                    Action = "Wait",
+                    ActionData = "500"
+                },
+                new AutomationStep
+                {
+                    Description = "5. 다른 이름으로 내보내기 클릭",
+                    Selector = new UiaSelector
+                    {
+                        AutomationId = "40487",
+                        Name = "다른 이름으로 내보내기...",
+                        ControlType = "MenuItem"
+                    },
+                    Action = "Click"
+                },
+                new AutomationStep
+                {
+                    Description = "6. '내보내기' 대화상자 확인",
+                    Selector = new UiaSelector
+                    {
+                        Name = "다른 이름으로 내보내기",
+                        ClassName = "#32770",
+                        ControlType = "Window"
+                    },
+                    Action = "Wait",
+                    ActionData = "1000"
+                }
+            ]
+        });
     }
 
     /// <summary>
-    /// featureId와 스크립트를 등록합니다. (향후 확장용)
+    /// 자동화 스크립트를 등록합니다.
     /// </summary>
-    /// <param name="featureId">기능 식별자</param>
-    /// <param name="script">자동화 스크립트</param>
-    public static void RegisterScript(string featureId, FeatureScript script)
+    private static void RegisterScript(string featureId, FeatureScript script)
     {
         if (string.IsNullOrWhiteSpace(featureId))
         {
-            LoggingService.LogWarn("빈 featureId로 RegisterScript() 호출됨");
-            return;
+            throw new ArgumentException("featureId가 비어 있습니다.", nameof(featureId));
         }
 
         if (script == null)
         {
-            LoggingService.LogWarn($"null script로 RegisterScript() 호출됨: {featureId}");
-            return;
+            throw new ArgumentNullException(nameof(script));
         }
 
         _registry[featureId] = script;
-        LoggingService.LogInfo($"FeatureScript 등록 완료: {featureId} - {script.Description}");
     }
 
     /// <summary>
-    /// 등록된 모든 featureId 목록을 가져옵니다. (디버깅용)
+    /// 등록된 모든 featureId 목록을 반환합니다.
     /// </summary>
-    /// <returns>등록된 featureId 목록</returns>
     public static IEnumerable<string> GetRegisteredFeatureIds()
     {
-        return _registry.Keys;
+        return _registry.Keys.ToList();
+    }
+
+    /// <summary>
+    /// 지정된 featureId에 해당하는 자동화 스크립트를 가져옵니다.
+    /// </summary>
+    public static FeatureScript? Get(string featureId)
+    {
+        if (string.IsNullOrWhiteSpace(featureId))
+        {
+            return null;
+        }
+
+        _registry.TryGetValue(featureId, out var script);
+        return script;
     }
 }

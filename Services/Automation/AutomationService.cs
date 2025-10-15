@@ -304,6 +304,7 @@ public class AutomationService : IAutomationService, IDisposable
     private static bool IsPassiveAction(string action)
     {
         return action.Equals("Wait", StringComparison.OrdinalIgnoreCase) ||
+               action.Equals("WaitForElement", StringComparison.OrdinalIgnoreCase) ||
                action.Equals("WaitForFolderDialog", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -404,6 +405,20 @@ public class AutomationService : IAutomationService, IDisposable
             }
         }
 
+        // Window를 찾는 경우 - 연결전송된 촬영 설정 윈도우 우선 탐색
+        if (currentStep != null &&
+            !string.IsNullOrWhiteSpace(currentStep.Selector.ControlType) &&
+            currentStep.Selector.ControlType.Equals("Window", StringComparison.OrdinalIgnoreCase))
+        {
+            var tetheredCaptureDialog = FindTetheredCaptureDialog(allWindows);
+            if (tetheredCaptureDialog != null)
+            {
+                LoggingService.LogInfo($"연결전송된 촬영 설정 윈도우 발견 (Name: {GetSafeProperty(tetheredCaptureDialog, e => e.Name)}) - 이 Window 사용");
+                TryBringWindowToFront(tetheredCaptureDialog);
+                return tetheredCaptureDialog;
+            }
+        }
+
         // 다른 UI 요소를 찾는 경우 - 대화상자 우선 순위 적용
         // FlaUIInspectData.md 기반: #32770 클래스 이름의 '폴더 선택' 윈도우 우선 탐색
         var folderDialog = FindFolderDialogByProcess(app.ProcessId) ?? FindFolderDialogWindow(allWindows);
@@ -478,6 +493,30 @@ public class AutomationService : IAutomationService, IDisposable
         }
 
         LoggingService.LogInfo("'폴더 선택' 대화상자를 찾지 못했습니다 (Name='폴더 선택', ClassName='#32770' 조건에 맞는 윈도우 없음)");
+        return null;
+    }
+
+    /// <summary>
+    /// '연결전송된 촬영 설정' 윈도우 팝업 확인
+    /// FlaUIInspectData.md 기반: Name='연결전송된 촬영 설정', ClassName='Afx:0000000140000000:0'
+    /// </summary>
+    private AutomationElement? FindTetheredCaptureDialog(IEnumerable<AutomationElement> windows)
+    {
+        foreach (var window in windows)
+        {
+            var name = GetSafeProperty(window, e => e.Name);
+            var className = GetSafeProperty(window, e => e.ClassName);
+
+            // FlaUIInspectData.md 정보: Name='연결전송된 촬영 설정', ClassName='Afx:0000000140000000:0'
+            if (name.Equals("연결전송된 촬영 설정", StringComparison.Ordinal) &&
+                className.Equals("Afx:0000000140000000:0", StringComparison.Ordinal))
+            {
+                LoggingService.LogInfo($"'연결전송된 촬영 설정' 윈도우 발견 (Name: {name}, ClassName: {className})");
+                return window;
+            }
+        }
+
+        LoggingService.LogInfo("'연결전송된 촬영 설정' 윈도우를 찾지 못했습니다");
         return null;
     }
 
@@ -970,21 +1009,22 @@ public class AutomationService : IAutomationService, IDisposable
             }
         }
 
+        // 일반적인 텍스트 입력 처리
         element.Focus();
 
-        // 기존 ToolbarWindow32 또는 ComboBoxEx32 처리
-        if (className.Equals("ToolbarWindow32", StringComparison.OrdinalIgnoreCase) ||
-            className.Equals("ComboBoxEx32", StringComparison.OrdinalIgnoreCase))
+        // 기존 텍스트 선택 삭제 (더블 클릭으로 전체 선택 후 삭제)
+        try
         {
-            Keyboard.TypeSimultaneously(VirtualKeyShort.ALT, VirtualKeyShort.KEY_D);
-            await Task.Delay(200, ct);
-            Keyboard.Type(text);
-            return;
+            element.DoubleClick();
+            await Task.Delay(100, ct);
+            Keyboard.Press(VirtualKeyShort.DELETE);
+            await Task.Delay(100, ct);
+        }
+        catch (Exception ex)
+        {
+            LoggingService.LogWarn($"텍스트 선택 삭제 실패: {ex.Message} - 직접 입력 시도");
         }
 
-        // 일반적인 텍스트 입력 처리
-        Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_A);
-        await Task.Delay(100, ct);
         Keyboard.Type(text);
     }
 
@@ -1296,65 +1336,13 @@ public class AutomationService : IAutomationService, IDisposable
             case "click":
                 if (element == null) throw new InvalidOperationException($"Click 액션에 UI 요소가 필요합니다: {step.Description}");
 
-                // MenuItem에 대한 특별 처리 - 키보드 단축키 사용
+                // MenuItem에 대한 특별 처리 - 직접 클릭만 사용
                 if (element.ControlType == FlaUI.Core.Definitions.ControlType.MenuItem)
                 {
                     LoggingService.LogInfo($"MenuItem 클릭 시도: {step.Description}");
 
-                    // MenuItem의 이름을 확인하고 적절한 키보드 단축키 사용
-                    var itemName = GetSafeProperty(element, e => e.Name);
-
-                    if (!string.IsNullOrEmpty(itemName))
-                    {
-                        // 파일 메뉴 처리
-                        if (itemName.Contains("파일") || itemName.Contains("File"))
-                        {
-                            LoggingService.LogInfo("파일 메뉴 - Alt+F 단축키 사용");
-                            Keyboard.TypeSimultaneously(VirtualKeyShort.ALT, VirtualKeyShort.KEY_F);
-                            await Task.Delay(500, ct);
-                        }
-                        // 내보내기 메뉴 처리
-                        else if (itemName.Contains("내보내기") || itemName.Contains("Export"))
-                        {
-                            LoggingService.LogInfo("내보내기 메뉴 - Ctrl+Shift+E 단축키 사용");
-                            Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.SHIFT, VirtualKeyShort.KEY_E);
-                            await Task.Delay(500, ct);
-                        }
-                        // 연결전송된 촬영 메뉴 처리
-                        else if (itemName.Contains("연결전송된 촬영"))
-                        {
-                            LoggingService.LogInfo("연결전송된 촬영 메뉴 - 키보드 탐색 사용");
-                            // 파일 메뉴 열기 (Alt+F)
-                            Keyboard.TypeSimultaneously(VirtualKeyShort.ALT, VirtualKeyShort.KEY_F);
-                            await Task.Delay(500, ct);
-                            // 아래 화살표로 이동
-                            Keyboard.Press(VirtualKeyShort.DOWN);
-                            await Task.Delay(200, ct);
-                            Keyboard.Press(VirtualKeyShort.DOWN);
-                            await Task.Delay(200, ct);
-                            // Enter 키로 선택
-                            Keyboard.Press(VirtualKeyShort.RETURN);
-                            await Task.Delay(500, ct);
-                        }
-                        // 연결전송된 촬영 시작 메뉴 처리
-                        else if (itemName.Contains("연결전송된 촬영 시작"))
-                        {
-                            LoggingService.LogInfo("연결전송된 촬영 시작 메뉴 - 키보드 탐색 사용");
-                            // 연결전송된 촬영 메뉴가 이미 열려있으므로 바로 시작 선택
-                            Keyboard.Press(VirtualKeyShort.RETURN);
-                            await Task.Delay(500, ct);
-                        }
-                        else
-                        {
-                            LoggingService.LogInfo($"기타 MenuItem ({itemName}) - 직접 클릭 시도");
-                            element.Click();
-                        }
-                    }
-                    else
-                    {
-                        LoggingService.LogWarn("MenuItem 이름을 찾을 수 없어 직접 클릭 시도");
-                        element.Click();
-                    }
+                    // 모든 MenuItem은 직접 클릭으로 처리
+                    element.Click();
                 }
                 // ComboBox에 대한 특별 처리
                 else if (element.ControlType == FlaUI.Core.Definitions.ControlType.ComboBox)
@@ -1423,32 +1411,23 @@ public class AutomationService : IAutomationService, IDisposable
                         // 다양한 확장 방법 시도
                         try
                         {
-                            // 시도 1: F4 키로 직접 확장
-                            Keyboard.Press(VirtualKeyShort.F4);
+                            // 시도 1: 다시 클릭
+                            element.Click();
                             await Task.Delay(300, ct);
 
-                            // 재확인
                             isExpanded = IsComboBoxDropdownOpen();
-                            LoggingService.LogInfo($"F4 키 후 확장 상태 재확인: {isExpanded}");
+                            LoggingService.LogInfo($"재클릭 후 확장 상태 재확인: {isExpanded}");
 
                             if (!isExpanded)
                             {
-                                // 시도 2: Alt+Down Arrow
-                                Keyboard.TypeSimultaneously(VirtualKeyShort.ALT, VirtualKeyShort.DOWN);
-                                await Task.Delay(300, ct);
-
-                                isExpanded = IsComboBoxDropdownOpen();
-                                LoggingService.LogInfo($"Alt+Down 후 확장 상태 재확인: {isExpanded}");
-                            }
-
-                            if (!isExpanded)
-                            {
-                                // 시도 3: 다시 클릭
+                                // 시도 2: 포커스 설정 후 다시 클릭
+                                element.Focus();
+                                await Task.Delay(100, ct);
                                 element.Click();
                                 await Task.Delay(300, ct);
 
                                 isExpanded = IsComboBoxDropdownOpen();
-                                LoggingService.LogInfo($"재클릭 후 확장 상태 재확인: {isExpanded}");
+                                LoggingService.LogInfo($"포커스 후 재클릭 확장 상태 재확인: {isExpanded}");
                             }
                         }
                         catch (Exception ex)
@@ -1491,17 +1470,21 @@ public class AutomationService : IAutomationService, IDisposable
                 var keys = ResolveText(step.ActionData, inputValues);
 
                 // 특수 키 처리
-                if (keys.Equals("Ctrl+A", StringComparison.OrdinalIgnoreCase))
-                {
-                    Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_A);
-                }
-                else if (keys.Equals("Delete", StringComparison.OrdinalIgnoreCase))
+                if (keys.Equals("Delete", StringComparison.OrdinalIgnoreCase))
                 {
                     Keyboard.Press(VirtualKeyShort.DELETE);
                 }
                 else
                 {
-                    Keyboard.Type(keys);
+                    // 주소창에 경로 붙여넣기 처리 (15단계)
+                    if (step.Description.Contains("주소창 클릭하여 경로 붙여넣기"))
+                    {
+                        await ClearAndTypeAsync(element, keys, ct);
+                    }
+                    else
+                    {
+                        Keyboard.Type(keys);
+                    }
                 }
 
                 LoggingService.LogInfo($"키보드 입력 완료: {step.Description} = \"{keys}\"");
@@ -1577,6 +1560,31 @@ public class AutomationService : IAutomationService, IDisposable
                 await Task.Delay(delayMs, ct);
                 LoggingService.LogInfo($"대기 완료: {delayMs}ms");
                 break;
+
+            case "waitforelement":
+                if (element == null) throw new InvalidOperationException($"WaitForElement 액션에 UI 요소가 필요합니다: {step.Description}");
+
+                var timeoutMs = int.TryParse(step.ActionData, out var waitMs) ? waitMs : 5000;
+                var startWaitTime = Stopwatch.StartNew();
+
+                while (startWaitTime.ElapsedMilliseconds < timeoutMs)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    // 현재 활성 윈도우에서 요소 다시 검색
+                    var activeWindow = GetCurrentActiveWindow(app, step);
+                    var foundElement = FindElement(activeWindow, step.Selector);
+
+                    if (foundElement != null)
+                    {
+                        LoggingService.LogInfo($"요소 대기 완료: {step.Description} (소요 시간: {startWaitTime.ElapsedMilliseconds}ms)");
+                        return;
+                    }
+
+                    await Task.Delay(200, ct);
+                }
+
+                throw new InvalidOperationException($"요소 대기 타임아웃: {step.Description} (타임아웃: {timeoutMs}ms)");
 
             case "waitforfolderdialog":
                 await WaitForFolderDialogAsync(app, ct);

@@ -20,102 +20,95 @@ ControlType:
 
 # 촬영 매니저
 ---
-#### 왼쪽 상단 '파일(F)' 클릭
+#### 1.왼쪽 상단 '파일(F)' 클릭
 AutomationId:Not Supported
 Name:파일(F)
 ClassName:Not Supported
 ControlType:MenuItem
 
-#### '메뉴' 드롭다운 확인
+#### 2.'메뉴' 드롭다운 확인
 AutomationId:Not Supported
 Name:파일(F)
 ClassName:#32768
 ControlType:Menu
 
-#### '연결전송된 촬영' 클릭
+#### 3.'연결전송된 촬영' 클릭
 AutomationId:Not Supported
 Name:연결전송된 촬영
 ClassName:Not Supported
 ControlType:MenuItem
 
-#### '연결전송된 촬영' 드롭다운 확인
+#### 4.'연결전송된 촬영' 드롭다운 확인
 AutomationId:Not Supported
 Name:파일(F)
 ClassName:#32768
 ControlType:Menu
 
-#### '연결전송된 촬영 시작' 클릭
+#### 5.'연결전송된 촬영 시작' 클릭
 AutomationId:40506
 Name:연결전송된 촬영 시작...
 ClassName:Not Supported
 ControlType:MenuItem
 
-
-
-
-
-
-
-#### '연결전송된 촬영 설정' 윈도우 팝업 확인인
+#### 6.'연결전송된 촬영 설정' 윈도우 팝업 확인
 AutomationId:Not Supported
 Name:연결전송된 촬영 설정
 ClassName:Afx:0000000140000000:0
 ControlType:Window
 
-
+#### 7. '세션 이름' 클릭
 AutomationId:65535
 Name:세션 이름:
 ClassName:Edit
 ControlType:Edit
 
-이후 붙여넣기
+#### 8. '모두 선택' -> '삭제' -> 전 이름+휴대전화뒤4자리 조합값 붙여넣기
 
-
+#### 9. 숏별로 사진 나누기 체크박스 상태 확인
 AutomationId:Edit
 Name:숏별로 사진 나누기
 ClassName:Button
 ControlType:CheckBox
 ToggleState: On / Off 
 
-위 체크박스 '해제'확인하기
+#### 10. 상태 On -> Off, Off -> Pass
 
-#### 사용자 정의이름 템플릿 콤보박스 선택
+#### 11. '사용자 정의이름' 템플릿 콤보박스 클릭
 AutomationId:2134
 Name:템플릿:
 ClassName:ComboBox
 ControlType:ComboBox
 
-#### 사용자 정의이름 템플릿 콤보박스 드롭다운 확인
+#### 12. '사용자 정의이름' 템플릿 콤보박스 드롭다운 확인
 AutomationId:Not Supported
 Name:컨텍스트
 ClassName:#32768
 ControlType:Menu
 
-#### 콤보박스에서 원본 파일 번호 선택
+#### 13. '사용자 정의 이름 - 원본 파일 번호' 선택
 AutomationId:3
 Name:사용자 정의 이름 - 원본 파일 번호
 ClassName:Not Supported
 ControlType:MenuItem
 
-#### '원본' 텍스트 입력력
+#### 14. '사용자 정의 텍스트' 입력창 클릭
 AutomationId:2136
 Name:사용자 정의 텍스트:
 ClassName:Edit
 ControlType:Edit
 
-
+#### 15. '원본' 텍스트 입력
 
 ---
 
 
-
-#### 경로 '선택' 버튼 클릭
+#### 16. 경로 '선택' 버튼 클릭
 AutomationId:65535
 Name:선택...
 ClassName:Button
 ControlType:Button
 
-#### 윈도우 창
+#### 17. '폴더 선택' 윈도우 확인
 AutomationId:Not Supported
 Name:폴더 선택
 ClassName:#32770
@@ -123,13 +116,15 @@ ControlType:Window
 
 --
 
-#### 주소창 클릭하여 'C:\dabi_shoot' 붙여넣기
+#### 18. 주소창 클릭
 AutomationId:1001
-Name:[고려하지 말 것]
+Name:
 ClassName:ToolbarWindow32
 ControlType:ToolBar
 
-#### 최종 '확인' 버튼 클릭릭
+#### 19. 'C:\dabi_shoot' 텍스트 붙여넣기
+
+#### 20. 최종 '확인' 버튼 클릭릭
 AutomationId:1
 Name:확인
 ClassName:Button
