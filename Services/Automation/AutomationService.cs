@@ -2067,37 +2067,54 @@ public class AutomationService : IAutomationService, IDisposable
         LoggingService.LogInfo($"폴더 선택창 경로 입력 성공: {targetPath}");
     }
 
-    /// <summary>
-    /// 전역에서 폴더 선택창을 찾습니다 (PID 필터 없음).
-    /// ClassName 후보: CabinetWClass, ExplorerFrame, XamlWindow, #32770
-    /// 최소 8초 간 Retry(200ms 간격)로 폴링
-    /// </summary>
-    private async Task<AutomationElement?> FindFolderPickerGlobalAsync(CancellationToken ct)
+private async Task<AutomationElement?> FindFolderPickerGlobalAsync(CancellationToken ct)
     {
-        var totalTimeout = TimeSpan.FromSeconds(8);
-        var overallTimer = Stopwatch.StartNew();
+        var timeout = TimeSpan.FromSeconds(8);
+        var pollInterval = TimeSpan.FromMilliseconds(200);
+        var startTime = Stopwatch.StartNew();
 
-        foreach (var automation in _automationBackends)
+        LoggingService.LogInfo("포어그라운드 창 우선 폴더 선택창 탐색 시작 (8초 타임아웃)");
+
+        while (startTime.Elapsed < timeout)
         {
-            var remaining = totalTimeout - overallTimer.Elapsed;
-            if (remaining <= TimeSpan.Zero)
-            {
-                LoggingService.LogWarn("폴더 선택창 탐색 타임아웃 - 잔여 시간 없음");
-                break;
-            }
+            ct.ThrowIfCancellationRequested();
 
-            var result = await FindFolderPickerGlobalAsync(automation, remaining, ct);
-            if (result != null)
+            try
             {
-                if (!ReferenceEquals(automation, _automation))
+                var foregroundHwnd = Interop.Win32.GetForegroundWindow();
+                if (foregroundHwnd != IntPtr.Zero)
                 {
-                    LoggingService.LogInfo($"UIA 폴백 백엔드({automation.GetType().Name})에서 폴더 선택창을 찾았습니다.");
-                }
+                    const int nMaxCount = 256;
+                    var sb = new System.Text.StringBuilder(nMaxCount);
+                    var len = Interop.Win32.GetClassName(foregroundHwnd, sb, nMaxCount);
 
-                return result;
+                    if (len > 0)
+                    {
+                        var className = sb.ToString();
+                        // Check for both classic and modern dialog class names
+                        if (className.Equals("#32770", StringComparison.OrdinalIgnoreCase) ||
+                            className.Equals("CabinetWClass", StringComparison.OrdinalIgnoreCase))
+                        {
+                            LoggingService.LogInfo($"포어그라운드 창 감지: hwnd={foregroundHwnd}, className={className}");
+                            var element = _automation.FromHandle(foregroundHwnd);
+                            if (element != null)
+                            {
+                                LoggingService.LogInfo("포어그라운드 창을 폴더 선택창으로 확인 및 반환합니다.");
+                                return element;
+                            }
+                        }
+                    }
+                }
             }
+            catch (Exception ex)
+            {
+                LoggingService.LogWarn($"포어그라운드 창 탐색 중 오류: {ex.Message}");
+            }
+
+            await Task.Delay(pollInterval, ct);
         }
 
+        LoggingService.LogWarn("포어그라운드에서 폴더 선택창 탐색 타임아웃 (8초)");
         return null;
     }
 

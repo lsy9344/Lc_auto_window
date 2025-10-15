@@ -200,18 +200,6 @@ public static class FeatureSelectorRegistry
 
                 new AutomationStep
                 {
-                    Description = "14. 폴더 선택 윈도우 확인",
-                    Selector = new UiaSelector
-                    {
-                        Name = "폴더 선택",
-                        ClassName = "#32770",
-                        ControlType = "Window"
-                    },
-                    Action = "WaitForFolderDialog"
-                },
-
-                new AutomationStep
-                {
                     Description = "15. 폴더 선택창 찾기 및 Ctrl+L로 경로 입력 (전역 탐색 + 최신 윈도우 지원)",
                     Selector = new UiaSelector
                     {
@@ -220,7 +208,7 @@ public static class FeatureSelectorRegistry
                         ControlType = "Window"
                     },
                     Action = "FindFolderPickerAndTypePath",
-                    ActionData = "{targetFolder}"
+                    ActionData = "{shootFolder}"
                 },
 
                 new AutomationStep
