@@ -212,14 +212,14 @@ public static class FeatureSelectorRegistry
 
                 new AutomationStep
                 {
-                    Description = "15. 주소창 클릭하여 경로 붙여넣기",
+                    Description = "15. 폴더 선택창 찾기 및 Ctrl+L로 경로 입력 (전역 탐색 + 최신 윈도우 지원)",
                     Selector = new UiaSelector
                     {
-                        AutomationId = "1001",
-                        ClassName = "ToolbarWindow32",
-                        ControlType = "ToolBar"
+                        // 전역 탐색용 - PID 필터 없이 전체 데스크톱에서 창 검색
+                        // ClassName 후보: CabinetWClass, ExplorerFrame, XamlWindow, #32770
+                        ControlType = "Window"
                     },
-                    Action = "SendKeys",
+                    Action = "FindFolderPickerAndTypePath",
                     ActionData = "{targetFolder}"
                 },
 

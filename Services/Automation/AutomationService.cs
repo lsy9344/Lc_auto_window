@@ -1598,6 +1598,17 @@ public class AutomationService : IAutomationService, IDisposable
                 await HandleOverwriteWarningAsync(ct);
                 break;
 
+            case "findfolderpickerandtypepath":
+                if (string.IsNullOrWhiteSpace(step.ActionData))
+                {
+                    throw new InvalidOperationException($"FindFolderPickerAndTypePath 액션에 ActionData가 없습니다: {step.Description}");
+                }
+
+                var targetPath = ResolveText(step.ActionData, inputValues);
+                await FindFolderPickerAndTypePathAsync(targetPath, ct);
+                LoggingService.LogInfo($"폴더 선택창 경로 입력 완료: {step.Description} = \"{targetPath}\"");
+                break;
+
             case "findrelativeelement":
                 if (element == null) throw new InvalidOperationException($"FindRelativeElement 액션에 기준 요소가 필요합니다: {step.Description}");
 
@@ -1793,6 +1804,253 @@ public class AutomationService : IAutomationService, IDisposable
         }
 
         LoggingService.LogInfo("카메라 오류 감지 완료 - 문제 없음");
+    }
+
+    /// <summary>
+    /// 최신 윈도우 폴더 선택창을 찾고 Ctrl+L 단축키로 경로를 입력합니다.
+    /// 지침 1) 프로세스 한정 금지 + 모던/고전 창 동시 탐색
+    /// 지침 2) Ctrl+L 주소창 단축키로 경로 입력
+    /// 지침 3) 권한 정합 + 타이밍 보강
+    /// </summary>
+    private async Task FindFolderPickerAndTypePathAsync(string targetPath, CancellationToken ct)
+    {
+        LoggingService.LogInfo($"폴더 선택창 찾기 시작 (전역 탐색 + 최신 윈도우 지원): {targetPath}");
+
+        // 지침 3: 버튼 클릭 후 최소 300~500ms 지연 후 탐색 시작
+        await Task.Delay(400, ct);
+
+        // 지침 1: 전역 탐색 - Desktop 루트에서 창 검색 (PID 필터 제거)
+        var folderPicker = await FindFolderPickerGlobalAsync(ct);
+
+        if (folderPicker == null)
+        {
+            // 디버깅용 전체 윈도우 덤프
+            DumpTopWindows();
+            throw new TimeoutException("폴더 선택창을 8초 동안 찾지 못했습니다 (CabinetWClass, ExplorerFrame, XamlWindow, #32770 모두 탐색)");
+        }
+
+        // 지침 2: Ctrl+L 단축키로 경로 입력
+        await TypePathIntoFolderPickerAsync(folderPicker, targetPath, ct);
+
+        LoggingService.LogInfo($"폴더 선택창 경로 입력 성공: {targetPath}");
+    }
+
+    /// <summary>
+    /// 전역에서 폴더 선택창을 찾습니다 (PID 필터 없음).
+    /// ClassName 후보: CabinetWClass, ExplorerFrame, XamlWindow, #32770
+    /// 최소 8초 간 Retry(200ms 간격)로 폴링
+    /// </summary>
+    private async Task<AutomationElement?> FindFolderPickerGlobalAsync(CancellationToken ct)
+    {
+        var timeout = TimeSpan.FromSeconds(8);
+        var pollInterval = TimeSpan.FromMilliseconds(200);
+        var startTime = Stopwatch.StartNew();
+
+        var desktop = _automation.GetDesktop();
+        var cf = _automation.ConditionFactory;
+
+        // 지침 1: 다양한 ClassName 지원 (모던/고전 창 동시 탐색)
+        var folderPickerCondition = cf.ByControlType(FlaUI.Core.Definitions.ControlType.Window)
+            .And(cf.ByClassName("CabinetWClass")
+              .Or(cf.ByClassName("ExplorerFrame"))
+              .Or(cf.ByClassName("XamlWindow"))
+              .Or(cf.ByClassName("#32770")));
+
+        LoggingService.LogInfo("전역 폴더 선택창 탐색 시작 (8초 타임아웃, 200ms 간격 폴링)");
+
+        while (startTime.Elapsed < timeout)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            try
+            {
+                var allWindows = desktop.FindAllChildren(folderPickerCondition);
+
+                foreach (var window in allWindows)
+                {
+                    if (IsFolderPickerWindow(window))
+                    {
+                        LoggingService.LogInfo($"폴더 선택창 발견 (전역 탐색): Name='{GetSafeProperty(window, e => e.Name)}', ClassName='{GetSafeProperty(window, e => e.ClassName)}'");
+
+                        // 지침 1: 찾은 창을 Focus() 할 수 있어야 함
+                        TryBringWindowToFront(window);
+                        return window;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LoggingService.LogWarn($"폴더 선택창 탐색 중 오류: {ex.Message}");
+            }
+
+            await Task.Delay(pollInterval, ct);
+        }
+
+        LoggingService.LogWarn("폴더 선택창 탐색 타임아웃 (8초)");
+        return null;
+    }
+
+    /// <summary>
+    /// 창이 폴더 선택창인지 확인합니다.
+    /// </summary>
+    private bool IsFolderPickerWindow(AutomationElement window)
+    {
+        try
+        {
+            var name = GetSafeProperty(window, e => e.Name);
+            var className = GetSafeProperty(window, e => e.ClassName);
+
+            // 기존 고전 폴더 선택창 (#32770)
+            if (className.Equals("#32770", StringComparison.OrdinalIgnoreCase))
+            {
+                // Name에 "폴더" 또는 "Folder"가 포함되어 있거나,
+                // 자식 요소에 확인/선택 버튼이 있는지 확인
+                if (name.Contains("폴더") || name.Contains("Folder") || name.Contains("Browse"))
+                {
+                    return true;
+                }
+
+                // 확인 버튼 확인
+                var cf = _automation.ConditionFactory;
+                var confirmButton = window.FindFirstDescendant(cf.ByControlType(FlaUI.Core.Definitions.ControlType.Button)
+                    .And(cf.ByName("확인").Or(cf.ByName("선택")).Or(cf.ByName("OK")).Or(cf.ByName("Select"))));
+
+                if (confirmButton != null)
+                {
+                    return true;
+                }
+            }
+
+            // 최신 파일 탐색기 기반 폴더 선택창 (CabinetWClass, ExplorerFrame, XamlWindow)
+            if (className.Equals("CabinetWClass", StringComparison.OrdinalIgnoreCase) ||
+                className.Equals("ExplorerFrame", StringComparison.OrdinalIgnoreCase) ||
+                className.Equals("XamlWindow", StringComparison.OrdinalIgnoreCase))
+            {
+                // 주소창이나 탐색 컨트롤이 있는지 확인
+                var cf = _automation.ConditionFactory;
+
+                // 주소창 확인 (다양한 AutomationId 지원)
+                var addressBar = window.FindFirstDescendant(cf.ByAutomationId("1001"))
+                    ?? window.FindFirstDescendant(cf.ByAutomationId("41477"))
+                    ?? window.FindFirstDescendant(cf.ByAutomationId("1148"));
+
+                if (addressBar != null)
+                {
+                    return true;
+                }
+
+                // 트리뷰나 목록 컨트롤 확인
+                var treeView = window.FindFirstDescendant(cf.ByControlType(FlaUI.Core.Definitions.ControlType.Tree))
+                    ?? window.FindFirstDescendant(cf.ByControlType(FlaUI.Core.Definitions.ControlType.List));
+
+                if (treeView != null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        catch (Exception ex)
+        {
+            LoggingService.LogWarn($"폴더 선택창 확인 중 오류: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 폴더 선택창에 Ctrl+L로 경로를 입력합니다.
+    /// 지침 2: 요소찾기 대신 Ctrl+L 주소창 단축키로 경로 입력
+    /// </summary>
+    private async Task TypePathIntoFolderPickerAsync(AutomationElement folderPicker, string path, CancellationToken ct)
+    {
+        LoggingService.LogInfo($"폴더 선택창에 경로 입력 시작 (Ctrl+L 방식): {path}");
+
+        try
+        {
+            // 지침 2: 창을 찾은 직후 Ctrl+L 전송으로 주소 입력 모드 진입
+            folderPicker.Focus();
+            await Task.Delay(100, ct);
+
+            // Ctrl+L 단축키로 주소창 활성화
+            Keyboard.Press(VirtualKeyShort.CONTROL);
+            Keyboard.Press(VirtualKeyShort.KEY_L);
+            Keyboard.Release(VirtualKeyShort.KEY_L);
+            Keyboard.Release(VirtualKeyShort.CONTROL);
+            await Task.Delay(200, ct);
+
+            // 지침 2: 지정 경로 입력 후 Enter
+            Keyboard.Type(path);
+            await Task.Delay(100, ct);
+            Keyboard.Press(VirtualKeyShort.RETURN);
+            Keyboard.Release(VirtualKeyShort.RETURN);
+            await Task.Delay(300, ct);
+
+            // 지침 2: 필요 시 '확인/선택/Open/Select' 버튼 눌러 닫기(있을 때만)
+            var cf = _automation.ConditionFactory;
+            var okButton = folderPicker.FindFirstDescendant(
+                cf.ByControlType(FlaUI.Core.Definitions.ControlType.Button)
+                    .And(cf.ByName("확인")
+                        .Or(cf.ByName("선택"))
+                        .Or(cf.ByName("Open"))
+                        .Or(cf.ByName("Select"))
+                        .Or(cf.ByName("OK"))));
+
+            if (okButton != null)
+            {
+                LoggingService.LogInfo("확인/선택 버튼 클릭");
+                okButton.AsButton().Invoke();
+                await Task.Delay(300, ct);
+            }
+            else
+            {
+                LoggingService.LogInfo("확인 버튼 없음 - Enter만으로 폴더 선택 완료");
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"폴더 선택창 경로 입력 실패: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// 디버깅용 전체 윈도우 덤프 (지침 3)
+    /// </summary>
+    private void DumpTopWindows()
+    {
+        try
+        {
+            var desktop = _automation.GetDesktop();
+            var cf = _automation.ConditionFactory;
+
+            var allWindows = desktop.FindAllChildren(cf.ByControlType(FlaUI.Core.Definitions.ControlType.Window));
+
+            LoggingService.LogInfo($"=== 디버깅: 전체 윈도우 덤프 (총 {allWindows.Length}개) ===");
+
+            foreach (var window in allWindows)
+            {
+                var name = GetSafeProperty(window, e => e.Name);
+                var className = GetSafeProperty(window, e => e.ClassName);
+                var isEnabled = window.IsEnabled;
+                var isVisible = !GetSafeIsOffscreen(window);
+
+                var info = $"Window: Name='{name}', Class='{className}', Enabled={isEnabled}, Visible={isVisible}";
+                LoggingService.LogInfo($"  {info}");
+
+                // 폴더 선택창 후보들 강조 표시
+                if (className.Equals("CabinetWClass") || className.Equals("ExplorerFrame") ||
+                    className.Equals("XamlWindow") || className.Equals("#32770"))
+                {
+                    LoggingService.LogInfo($"    → 폴더 선택창 후보!");
+                }
+            }
+
+            LoggingService.LogInfo("=== 윈도우 덤프 종료 ===");
+        }
+        catch (Exception ex)
+        {
+            LoggingService.LogWarn($"윈도우 덤프 중 오류: {ex.Message}");
+        }
     }
 
     /// <summary>
