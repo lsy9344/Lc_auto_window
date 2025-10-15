@@ -1,89 +1,165 @@
-지침 1) “프로세스 한정 금지” + “모던/고전 창 동시 탐색”
+지침 4) 포그라운드 창 기반 폴백(클래스/제목 가정 불필요)
 
-의도: 특정 PID에서만 찾지 말고 데스크톱 전체에서 “폴더 선택” 창을 찾는다. 최신 윈도우는 #32770가 아닌 파일탐색기 기반(CabinetWClass/ExplorerFrame/XamlWindow) 으로 뜰 수 있으므로 둘 다 지원한다. 제목(Name) 고정 매칭 금지.
+의도: 버튼 클릭 직후 실제 화면 최전면(Foreground)으로 올라온 창을 바로 잡아 Ctrl+L을 보내는 하드 폴백. 창을 못 찾아도 동작.
 
-수정 요구사항(수용기준)
+수용기준
 
-Desktop 루트에서 창 검색 (PID 필터 제거).
+“폴더 선택” 버튼 클릭 직후 ForegroundWindow가 바뀔 때까지 5초 폴링.
 
-ClassName 후보: CabinetWClass, ExplorerFrame, XamlWindow, #32770.
+포그라운드 창의 프로세스가 테스트 프로세스와 다른지 확인(자기 자신에 오타 입력 방지).
 
-최소 8초 간 Retry(200ms 간격)로 폴링.
+잡은 핸들을 FlaUI 요소로 승격해 Focus() 후 Ctrl+L → 경로 입력 → Enter.
 
-찾은 창을 Focus() 할 수 있어야 함.
+코드 스케치 (C# / FlaUI + P/Invoke)
 
-코드 스케치 (C# / FlaUI)
-
-AutomationElement FindFolderPicker(AutomationBase a, TimeSpan? to = null) {
-    var timeout = to ?? TimeSpan.FromSeconds(8);
-    var desk = a.GetDesktop();
-    var cf = a.ConditionFactory;
-
-    var cond = cf.ByControlType(ControlType.Window)
-        .And(cf.ByClassName("CabinetWClass")
-          .Or(cf.ByClassName("ExplorerFrame"))
-          .Or(cf.ByClassName("XamlWindow"))
-          .Or(cf.ByClassName("#32770")));
-
-    var r = Retry.WhileNull(() => desk.FindAllChildren(cond).FirstOrDefault(),
-                            timeout, TimeSpan.FromMilliseconds(200));
-    var win = r.Result ?? throw new TimeoutException("Folder picker not found");
-    win.Focus();
-    return win;
+static class Native {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
 }
 
-지침 2) 요소찾기 대신 Ctrl+L 주소창 단축키로 경로 입력
-
-의도: 내부 UI 구조(AutomationId, 가상화)가 들쭉날쭉하므로 주소창 단축키 Ctrl+L → 경로 입력 → Enter가 가장 견고하다.
-
-수정 요구사항(수용기준)
-
-창을 찾은 직후 Ctrl+L 전송으로 주소 입력 모드 진입.
-
-지정 경로(예: C:\)를 입력 후 Enter.
-
-필요 시 ‘확인/선택/Open/Select’ 버튼 눌러 닫기(있을 때만).
-
-코드 스케치
-
-void TypePathIntoPicker(AutomationBase a, string path) {
-    var dlg = FindFolderPicker(a);
-    dlg.Focus();
-    Keyboard.Press(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_L);
-    Keyboard.Type(path);
-    Keyboard.Press(VirtualKeyShort.RETURN);
-
-    var cf = a.ConditionFactory;
-    var ok = dlg.FindFirstDescendant(cf => cf.ByControlType(ControlType.Button)
-        .And(cf.ByName("확인").Or(cf.ByName("선택"))
-                          .Or(cf.ByName("Open")).Or(cf.ByName("Select"))));
-    ok?.AsButton()?.Invoke();
+AutomationElement WaitForegroundChanged(AutomationBase a, int ms = 5000) {
+    var until = DateTime.UtcNow.AddMilliseconds(ms);
+    uint myPid = (uint)Process.GetCurrentProcess().Id;
+    IntPtr last = IntPtr.Zero;
+    while (DateTime.UtcNow < until) {
+        var h = Native.GetForegroundWindow();
+        if (h != IntPtr.Zero && h != last) {
+            last = h;
+            Native.GetWindowThreadProcessId(h, out var pid);
+            if (pid != myPid) { // 내 프로세스 아닌 진짜 떠오른 창
+                var el = a.FromHandle(h);
+                if (el != null) return el;
+            }
+        }
+        Thread.Sleep(100);
+    }
+    throw new TimeoutException("Foreground window not detected.");
 }
 
-지침 3) 권한(Elevation) 정합 + 타이밍 보강
-
-의도: 대상 창이 관리자 권한(또는 부모 프로세스가 관리자)이면 자동화도 관리자 권한이어야 UIA가 보인다. 또한 버튼 클릭 직후 대화상자 생성까지 대기/재시도가 필요하다.
-
-수정 요구사항(수용기준)
-
-테스트 실행 프로세스를 관리자 권한으로도 실행해보는 옵션 제공(문서화).
-
-“폴더 선택” 버튼 클릭 후 최소 300~500ms 지연 → 위의 전역 탐색 수행.
-
-Retry.WhileNull로 8초 이상 대기, 실패 시 창 리스트를 로그로 덤프(클래스/제목 기록).
-
-코드 스케치
-
-// 버튼 클릭 직후 약간 대기 후 탐색
+// 사용 예: 버튼 클릭 직후
 button.AsButton().Invoke();
-WaitHelpers.Sleep(400); // or Task.Delay
-var dlg = FindFolderPicker(automation, TimeSpan.FromSeconds(8));
+var dlg = WaitForegroundChanged(automation);
+dlg.Focus();
+Keyboard.Press(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_L);
+Keyboard.Type(@"C:\");
+Keyboard.Press(VirtualKeyShort.RETURN);
 
-// 디버깅용 전체 윈도우 덤프(실패 시)
-void DumpTopWindows(AutomationBase a) {
-    var desk = a.GetDesktop();
-    foreach (var w in desk.FindAllChildren(
-        a.ConditionFactory.ByControlType(ControlType.Window))) {
-        Console.WriteLine($"Window: Name='{w.Name}', Class='{w.Properties.ClassName.Value}', CT='{w.ControlType}'");
+지침 5) Win32 HWND 크롤링 → FromHandle로 승격
+
+의도: UIA 트리에 안 보이는 창을 Win32 수준에서 직접 열거(EnumWindows) 하여 후보를 고른 뒤 FlaUI로 승격. 제목·클래스 불문, 가시성/스타일/오너를 단서로 탐지.
+
+수용기준
+
+EnumWindows로 최상위 HWND 나열 → IsWindowVisible & GetWindowText 길이>0 필터.
+
+오너(owner)가 내 메인 윈도우이거나(GW_OWNER), 스타일에 WS_EX_DLGMODALFRAME 있는 창 우선.
+
+못 찾으면 ClassName 힌트(CabinetWClass, #32770, XamlWindow, ApplicationFrameWindow, DirectUIHWND 포함 자식) 가점.
+
+최종 HWND를 automation.FromHandle(hwnd)로 요소화 → Ctrl+L 경로 입력.
+
+코드 스케치
+
+static class Native {
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+  [DllImport("user32.dll")] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+  [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr hWnd, int uCmd); // GW_OWNER=4
+  [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int nIndex); // GWL_EXSTYLE=-20
+  const int GW_OWNER = 4, GWL_EXSTYLE = -20, WS_EX_DLGMODALFRAME = 0x0001;
+}
+
+AutomationElement Win32CrawlPickFolderDialog(AutomationBase a, IntPtr mainHwnd) {
+    var cands = new List<IntPtr>();
+    Native.EnumWindows((h, l) => {
+        if (!Native.IsWindowVisible(h)) return true;
+        var sb = new StringBuilder(256);
+        Native.GetWindowText(h, sb, sb.Capacity);
+        var title = sb.ToString();
+        if (string.IsNullOrWhiteSpace(title)) return true;
+
+        // 힌트 점수 계산
+        int score = 0;
+        var clsSb = new StringBuilder(256);
+        Native.GetClassName(h, clsSb, clsSb.Capacity);
+        var cls = clsSb.ToString();
+
+        var owner = Native.GetWindow(h, Native.GW_OWNER);
+        var ex = Native.GetWindowLong(h, Native.GWL_EXSTYLE);
+
+        if (owner == mainHwnd) score += 3;
+        if ((ex & Native.WS_EX_DLGMODALFRAME) != 0) score += 2;
+
+        if (cls.Contains("CabinetWClass") || cls.Contains("#32770") ||
+            cls.Contains("XamlWindow") || cls.Contains("ApplicationFrameWindow"))
+            score += 2;
+
+        if (title.Contains("폴더") || title.Contains("찾아보기", StringComparison.OrdinalIgnoreCase) ||
+            title.Contains("Folder") || title.Contains("Browse"))
+            score += 2;
+
+        if (score >= 3) cands.Add(h);
+        return true;
+    }, IntPtr.Zero);
+
+    var hwnd = cands.FirstOrDefault();
+    if (hwnd == IntPtr.Zero) throw new Exception("No candidate dialog via Win32 crawl.");
+    return a.FromHandle(hwnd) ?? throw new Exception("FromHandle failed.");
+}
+
+// 사용 예
+button.AsButton().Invoke();
+Thread.Sleep(400);
+var main = app.GetMainWindow(automation);
+var dlg = Win32CrawlPickFolderDialog(automation, main?.FrameworkAutomationElement.NativeWindowHandle ?? IntPtr.Zero);
+dlg.Focus();
+Keyboard.Press(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_L);
+Keyboard.Type(@"C:\");
+Keyboard.Press(VirtualKeyShort.RETURN);
+
+지침 6) 백엔드/환경 전환(UA2↔UA3, x64, DPI, 샌드박스)
+
+의도: UIA 백엔드/프로세스/환경 차이로 인해 트리가 숨는 케이스를 정면 돌파.
+
+수용기준
+
+UIA2Automation로 한 번, UIA3Automation로 한 번 모두 시도하는 팩토리 추가.
+
+테스트 실행을 x64 빌드로 고정(Windows 64비트에서 권장).
+
+시작 시 DPI 우회 적용: SetProcessDPIAware() 호출 또는 앱 매니페스트 DPI Aware 설정.
+
+(중요) 앱과 동일/높은 권한으로 실행(관리자 권한 옵션). 샌드박스/가상 데스크톱(보안 데스크톱)에서는 불가.
+
+코드 스케치
+
+// 1) 백엔드 스위치 유틸
+AutomationBase CreateAutomation(bool useUia2) =>
+    useUia2 ? new UIA2Automation() : new UIA3Automation();
+
+// 2) 시도 순서: UIA3 → 실패 시 UIA2
+AutomationElement TryFindWithBothBackends(Func<AutomationBase, AutomationElement> finder) {
+    using (var a3 = CreateAutomation(false)) {
+        try { return finder(a3); } catch { /* fallthrough */ }
+    }
+    using (var a2 = CreateAutomation(true)) {
+        return finder(a2);
     }
 }
+
+// 3) DPI 인지 (프로세스 초기에 1회)
+[DllImport("user32.dll")] static extern bool SetProcessDPIAware();
+static void EnsureDpiAware() { try { SetProcessDPIAware(); } catch {} }
+
+// 사용 예
+EnsureDpiAware();
+var dlg = TryFindWithBothBackends(a => {
+    // 앞서 만든 FindFolderPicker 또는 Win32CrawlPickFolderDialog 사용
+    return FindFolderPicker(a, TimeSpan.FromSeconds(8));
+});
+dlg.Focus();
+Keyboard.Press(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_L);
+Keyboard.Type(@"C:\");
+Keyboard.Press(VirtualKeyShort.RETURN);

@@ -4,11 +4,16 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
+using System.Security.Principal;
+using System.Text;
 using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Input;
 using FlaUI.Core.WindowsAPI;
+using FlaUI.UIA2;
 using FlaUI.UIA3;
+using Lc_auto.Interop;
 
 namespace Lc_auto.Services.Automation;
 
@@ -18,7 +23,9 @@ namespace Lc_auto.Services.Automation;
 /// </summary>
 public class AutomationService : IAutomationService, IDisposable
 {
-    private readonly UIA3Automation _automation;
+    private readonly AutomationBase _automation;
+    private readonly AutomationBase? _automationFallback;
+    private readonly IReadOnlyList<AutomationBase> _automationBackends;
     private readonly IConfigService _configService;
     private bool _disposed;
 
@@ -87,7 +94,25 @@ public class AutomationService : IAutomationService, IDisposable
     {
         _configService = configService ?? throw new ArgumentNullException(nameof(configService));
         _automation = new UIA3Automation();
-        LoggingService.LogInfo("AutomationService 초기화 완료 (FlaUI UIA3)");
+
+        try
+        {
+            _automationFallback = new UIA2Automation();
+        }
+        catch (Exception ex)
+        {
+            _automationFallback = null;
+            LoggingService.LogWarn($"UIA2 자동화 백엔드 초기화 실패 - UIA3만 사용합니다: {ex.Message}");
+        }
+
+        _automationBackends = _automationFallback != null
+            ? new[] { _automation, _automationFallback }
+            : new[] { _automation };
+
+        LogAutomationEnvironment();
+        LoggingService.LogInfo(_automationFallback != null
+            ? "AutomationService 초기화 완료 (기본: UIA3, 폴백: UIA2)"
+            : "AutomationService 초기화 완료 (UIA3 단일 백엔드)");
     }
 
     /// <inheritdoc />
@@ -480,19 +505,16 @@ public class AutomationService : IAutomationService, IDisposable
     {
         foreach (var window in windows)
         {
-            var name = GetSafeProperty(window, e => e.Name);
-            var className = GetSafeProperty(window, e => e.ClassName);
-
-            // FlaUIInspectData.md 정보: Name='폴더 선택', ClassName='#32770'
-            if (name.Equals("폴더 선택", StringComparison.Ordinal) &&
-                className.Equals("#32770", StringComparison.Ordinal))
+            if (IsFolderPickerWindow(_automation, window))
             {
-                LoggingService.LogInfo($"'폴더 선택' 대화상자 발견 (Name: {name}, ClassName: {className})");
+                var name = GetSafeProperty(window, e => e.Name);
+                var className = GetSafeProperty(window, e => e.ClassName);
+                LoggingService.LogInfo($"폴더 선택 대화상자 후보 발견 (Name: {name}, ClassName: {className})");
                 return window;
             }
         }
 
-        LoggingService.LogInfo("'폴더 선택' 대화상자를 찾지 못했습니다 (Name='폴더 선택', ClassName='#32770' 조건에 맞는 윈도우 없음)");
+        LoggingService.LogInfo("폴더 선택 대화상자를 찾지 못했습니다 (표준 UIA 탐색)");
         return null;
     }
 
@@ -1030,10 +1052,11 @@ public class AutomationService : IAutomationService, IDisposable
 
     private async Task WaitForFolderDialogAsync(Application app, CancellationToken ct)
     {
-        const int timeoutMs = 5000;
+        const int timeoutMs = 8000;
         const int pollIntervalMs = 200;
 
         var sw = Stopwatch.StartNew();
+        var foregroundAttempted = false;
 
         while (true)
         {
@@ -1048,9 +1071,27 @@ public class AutomationService : IAutomationService, IDisposable
                 folderDialog = FindFolderDialogWindow(snapshotWindows);
             }
 
+            if (folderDialog == null && !foregroundAttempted)
+            {
+                var remainingMs = Math.Max(0, timeoutMs - sw.ElapsedMilliseconds);
+                var waitBudget = TimeSpan.FromMilliseconds(Math.Min(5000, remainingMs));
+
+                if (waitBudget > TimeSpan.Zero)
+                {
+                    folderDialog = await WaitForegroundFolderDialogAsync(waitBudget, ct);
+                }
+
+                foregroundAttempted = true;
+            }
+
+            if (folderDialog == null)
+            {
+                folderDialog = TryFindFolderDialogViaWin32(app);
+            }
+
             if (folderDialog != null)
             {
-                LoggingService.LogInfo($"폴더 선택 대화상자 감지 완료 (Name: {GetSafeProperty(folderDialog, e => e.Name)})");
+                LoggingService.LogInfo($"폴더 선택 대화상자 감지 완료 (Name: {GetSafeProperty(folderDialog, e => e.Name)}, ClassName: {GetSafeProperty(folderDialog, e => e.ClassName)})");
                 TryBringWindowToFront(folderDialog);
                 return;
             }
@@ -1061,7 +1102,6 @@ public class AutomationService : IAutomationService, IDisposable
                 snapshotWindows ??= CollectAllWindows(app);
                 LogWindowSnapshot(snapshotWindows, "폴더 대화상자 탐색 타임아웃 시점의 Window 목록");
 
-                // 타임아웃 시 TryBringWindowToFront 호출 제거하여 포커스 충돌 방지
                 throw new InvalidOperationException("폴더 선택 대화상자를 찾을 수 없습니다.");
             }
 
@@ -1077,6 +1117,198 @@ public class AutomationService : IAutomationService, IDisposable
             .FindAllChildren(cf => cf.ByControlType(FlaUI.Core.Definitions.ControlType.Window));
 
         return MergeWindows(appWindows, desktopWindows);
+    }
+
+    private async Task<AutomationElement?> WaitForegroundFolderDialogAsync(TimeSpan timeout, CancellationToken ct)
+    {
+        if (timeout <= TimeSpan.Zero)
+        {
+            return null;
+        }
+
+        var deadline = DateTime.UtcNow.Add(timeout);
+        var currentProcessId = (uint)Process.GetCurrentProcess().Id;
+        var lastHandle = IntPtr.Zero;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var foreground = Win32.GetForegroundWindow();
+            if (foreground != IntPtr.Zero && foreground != lastHandle)
+            {
+                lastHandle = foreground;
+                Win32.GetWindowThreadProcessId(foreground, out var foregroundPid);
+
+                if (foregroundPid != currentProcessId)
+                {
+                    foreach (var automation in _automationBackends)
+                    {
+                        try
+                        {
+                            var element = automation.FromHandle(foreground);
+                            if (element != null && IsFolderPickerWindow(automation, element))
+                            {
+                                LoggingService.LogInfo($"포어그라운드 창 기반 폴더 대화상자 감지 (백엔드: {automation.GetType().Name}, hwnd: 0x{foreground.ToInt64():X})");
+                                return element;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            LoggingService.LogWarn($"포어그라운드 창을 AutomationElement로 변환 실패 (백엔드 {automation.GetType().Name}): {ex.Message}");
+                        }
+                    }
+                }
+            }
+
+            await Task.Delay(100, ct);
+        }
+
+        return null;
+    }
+
+    private AutomationElement? TryFindFolderDialogViaWin32(Application app)
+    {
+        try
+        {
+            var mainWindowHandle = IntPtr.Zero;
+
+            try
+            {
+                var mainWindow = app.GetMainWindow(_automation);
+                mainWindowHandle = mainWindow?.FrameworkAutomationElement.NativeWindowHandle ?? IntPtr.Zero;
+            }
+            catch (Exception ex)
+            {
+                LoggingService.LogWarn($"메인 창 핸들을 가져오는 중 오류 발생: {ex.Message}");
+            }
+
+            var candidateHandle = FindFolderDialogHandleViaWin32(mainWindowHandle);
+            if (candidateHandle == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            foreach (var automation in _automationBackends)
+            {
+                try
+                {
+                    var element = automation.FromHandle(candidateHandle);
+                    if (element != null && IsFolderPickerWindow(automation, element))
+                    {
+                        LoggingService.LogInfo($"Win32 열거 기반 폴더 대화상자 감지 성공 (백엔드: {automation.GetType().Name}, hwnd: 0x{candidateHandle.ToInt64():X})");
+                        return element;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LoggingService.LogWarn($"Win32 대화상자 AutomationElement 변환 실패 (백엔드 {automation.GetType().Name}): {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LoggingService.LogWarn($"Win32 기반 폴더 대화상자 탐색 중 오류: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    private IntPtr FindFolderDialogHandleViaWin32(IntPtr mainWindowHandle)
+    {
+        var candidates = new List<(IntPtr Hwnd, int Score)>();
+        var currentProcessId = (uint)Process.GetCurrentProcess().Id;
+
+        Win32.EnumWindows((hwnd, lParam) =>
+        {
+            try
+            {
+                if (!Win32.IsWindowVisible(hwnd))
+                {
+                    return true;
+                }
+
+                Win32.GetWindowThreadProcessId(hwnd, out var pid);
+                if (pid == currentProcessId)
+                {
+                    return true;
+                }
+
+                var title = GetWindowTextSafe(hwnd);
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    return true;
+                }
+
+                var className = GetClassNameSafe(hwnd);
+                var score = 0;
+
+                var owner = Win32.GetWindow(hwnd, Win32.GW_OWNER);
+                if (mainWindowHandle != IntPtr.Zero && owner == mainWindowHandle)
+                {
+                    score += 3;
+                }
+
+                var exStyle = Win32.GetWindowLong(hwnd, Win32.GWL_EXSTYLE);
+                if ((exStyle & Win32.WS_EX_DLGMODALFRAME) != 0)
+                {
+                    score += 2;
+                }
+
+                if (!string.IsNullOrEmpty(className) &&
+                    (className.Contains("CabinetWClass", StringComparison.OrdinalIgnoreCase) ||
+                     className.Contains("#32770", StringComparison.OrdinalIgnoreCase) ||
+                     className.Contains("XamlWindow", StringComparison.OrdinalIgnoreCase) ||
+                     className.Contains("ApplicationFrameWindow", StringComparison.OrdinalIgnoreCase)))
+                {
+                    score += 2;
+                }
+
+                if (ContainsKeyword(title, FolderDialogTitleKeywords))
+                {
+                    score += 2;
+                }
+
+                if (score >= 3)
+                {
+                    candidates.Add((hwnd, score));
+                    LoggingService.LogInfo($"Win32 후보 창 발견 (hwnd: 0x{hwnd.ToInt64():X}, title: '{title}', class: '{className}', score: {score})");
+                }
+            }
+            catch (Exception ex)
+            {
+                LoggingService.LogWarn($"Win32 창 평가 중 오류: {ex.Message}");
+            }
+
+            return true;
+        }, IntPtr.Zero);
+
+        if (candidates.Count == 0)
+        {
+            return IntPtr.Zero;
+        }
+
+        var best = candidates
+            .OrderByDescending(c => c.Score)
+            .ThenBy(c => c.Hwnd.ToInt64())
+            .First();
+
+        LoggingService.LogInfo($"Win32 후보 선정: hwnd=0x{best.Hwnd.ToInt64():X}, score={best.Score}");
+        return best.Hwnd;
+    }
+
+    private static string GetWindowTextSafe(IntPtr hwnd)
+    {
+        var sb = new StringBuilder(256);
+        _ = Win32.GetWindowText(hwnd, sb, sb.Capacity);
+        return sb.ToString();
+    }
+
+    private static string GetClassNameSafe(IntPtr hwnd)
+    {
+        var sb = new StringBuilder(256);
+        _ = Win32.GetClassName(hwnd, sb, sb.Capacity);
+        return sb.ToString();
     }
 
     private void LogWindowSnapshot(IEnumerable<AutomationElement> windows, string header)
@@ -1842,12 +2074,40 @@ public class AutomationService : IAutomationService, IDisposable
     /// </summary>
     private async Task<AutomationElement?> FindFolderPickerGlobalAsync(CancellationToken ct)
     {
-        var timeout = TimeSpan.FromSeconds(8);
+        var totalTimeout = TimeSpan.FromSeconds(8);
+        var overallTimer = Stopwatch.StartNew();
+
+        foreach (var automation in _automationBackends)
+        {
+            var remaining = totalTimeout - overallTimer.Elapsed;
+            if (remaining <= TimeSpan.Zero)
+            {
+                LoggingService.LogWarn("폴더 선택창 탐색 타임아웃 - 잔여 시간 없음");
+                break;
+            }
+
+            var result = await FindFolderPickerGlobalAsync(automation, remaining, ct);
+            if (result != null)
+            {
+                if (!ReferenceEquals(automation, _automation))
+                {
+                    LoggingService.LogInfo($"UIA 폴백 백엔드({automation.GetType().Name})에서 폴더 선택창을 찾았습니다.");
+                }
+
+                return result;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<AutomationElement?> FindFolderPickerGlobalAsync(AutomationBase automation, TimeSpan timeout, CancellationToken ct)
+    {
         var pollInterval = TimeSpan.FromMilliseconds(200);
         var startTime = Stopwatch.StartNew();
 
-        var desktop = _automation.GetDesktop();
-        var cf = _automation.ConditionFactory;
+        var desktop = automation.GetDesktop();
+        var cf = automation.ConditionFactory;
 
         // 지침 1: 다양한 ClassName 지원 (모던/고전 창 동시 탐색)
         var folderPickerCondition = cf.ByControlType(FlaUI.Core.Definitions.ControlType.Window)
@@ -1856,7 +2116,7 @@ public class AutomationService : IAutomationService, IDisposable
               .Or(cf.ByClassName("XamlWindow"))
               .Or(cf.ByClassName("#32770")));
 
-        LoggingService.LogInfo("전역 폴더 선택창 탐색 시작 (8초 타임아웃, 200ms 간격 폴링)");
+        LoggingService.LogInfo($"전역 폴더 선택창 탐색 시작 (백엔드: {automation.GetType().Name}, 타임아웃: {timeout.TotalMilliseconds}ms, 200ms 간격 폴링)");
 
         while (startTime.Elapsed < timeout)
         {
@@ -1868,9 +2128,9 @@ public class AutomationService : IAutomationService, IDisposable
 
                 foreach (var window in allWindows)
                 {
-                    if (IsFolderPickerWindow(window))
+                    if (IsFolderPickerWindow(automation, window))
                     {
-                        LoggingService.LogInfo($"폴더 선택창 발견 (전역 탐색): Name='{GetSafeProperty(window, e => e.Name)}', ClassName='{GetSafeProperty(window, e => e.ClassName)}'");
+                        LoggingService.LogInfo($"폴더 선택창 발견 (전역 탐색, 백엔드 {automation.GetType().Name}): Name='{GetSafeProperty(window, e => e.Name)}', ClassName='{GetSafeProperty(window, e => e.ClassName)}'");
 
                         // 지침 1: 찾은 창을 Focus() 할 수 있어야 함
                         TryBringWindowToFront(window);
@@ -1880,20 +2140,20 @@ public class AutomationService : IAutomationService, IDisposable
             }
             catch (Exception ex)
             {
-                LoggingService.LogWarn($"폴더 선택창 탐색 중 오류: {ex.Message}");
+                LoggingService.LogWarn($"폴더 선택창 탐색 중 오류(백엔드 {automation.GetType().Name}): {ex.Message}");
             }
 
             await Task.Delay(pollInterval, ct);
         }
 
-        LoggingService.LogWarn("폴더 선택창 탐색 타임아웃 (8초)");
+        LoggingService.LogWarn($"폴더 선택창 탐색 타임아웃 (백엔드 {automation.GetType().Name}, 타임아웃 {timeout.TotalMilliseconds}ms)");
         return null;
     }
 
     /// <summary>
     /// 창이 폴더 선택창인지 확인합니다.
     /// </summary>
-    private bool IsFolderPickerWindow(AutomationElement window)
+    private bool IsFolderPickerWindow(AutomationBase automation, AutomationElement window)
     {
         try
         {
@@ -1911,7 +2171,7 @@ public class AutomationService : IAutomationService, IDisposable
                 }
 
                 // 확인 버튼 확인
-                var cf = _automation.ConditionFactory;
+                var cf = automation.ConditionFactory;
                 var confirmButton = window.FindFirstDescendant(cf.ByControlType(FlaUI.Core.Definitions.ControlType.Button)
                     .And(cf.ByName("확인").Or(cf.ByName("선택")).Or(cf.ByName("OK")).Or(cf.ByName("Select"))));
 
@@ -1927,7 +2187,7 @@ public class AutomationService : IAutomationService, IDisposable
                 className.Equals("XamlWindow", StringComparison.OrdinalIgnoreCase))
             {
                 // 주소창이나 탐색 컨트롤이 있는지 확인
-                var cf = _automation.ConditionFactory;
+                var cf = automation.ConditionFactory;
 
                 // 주소창 확인 (다양한 AutomationId 지원)
                 var addressBar = window.FindFirstDescendant(cf.ByAutomationId("1001"))
@@ -1987,7 +2247,8 @@ public class AutomationService : IAutomationService, IDisposable
             await Task.Delay(300, ct);
 
             // 지침 2: 필요 시 '확인/선택/Open/Select' 버튼 눌러 닫기(있을 때만)
-            var cf = _automation.ConditionFactory;
+            var automation = folderPicker.Automation ?? _automation;
+            var cf = automation.ConditionFactory;
             var okButton = folderPicker.FindFirstDescendant(
                 cf.ByControlType(FlaUI.Core.Definitions.ControlType.Button)
                     .And(cf.ByName("확인")
@@ -2138,6 +2399,77 @@ public class AutomationService : IAutomationService, IDisposable
         return result;
     }
 
+    private void LogAutomationEnvironment()
+    {
+        try
+        {
+            var backendOrder = string.Join(" → ", _automationBackends.Select(a => a.GetType().Name));
+            var is64BitProcess = Environment.Is64BitProcess ? "x64" : "x86";
+            var elevation = IsCurrentProcessElevated() ? "관리자" : "일반";
+            var dpiAwareness = GetProcessDpiAwarenessDescription();
+
+            LoggingService.LogInfo($"자동화 환경 확인 - 백엔드: {backendOrder}, 프로세스 비트수: {is64BitProcess}, DPI Awareness: {dpiAwareness}, 권한: {elevation}");
+        }
+        catch (Exception ex)
+        {
+            LoggingService.LogWarn($"자동화 환경 정보를 기록하지 못했습니다: {ex.Message}");
+        }
+    }
+
+    private static bool IsCurrentProcessElevated()
+    {
+        try
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            var principal = new WindowsPrincipal(identity);
+            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string GetProcessDpiAwarenessDescription()
+    {
+        try
+        {
+            using var currentProcess = Process.GetCurrentProcess();
+            var result = GetProcessDpiAwareness(currentProcess.Handle, out var awareness);
+
+            if (result == 0)
+            {
+                return awareness switch
+                {
+                    ProcessDpiAwareness.ProcessDpiUnaware => "Unaware",
+                    ProcessDpiAwareness.ProcessSystemDpiAware => "System",
+                    ProcessDpiAwareness.ProcessPerMonitorDpiAware => "PerMonitor",
+                    _ => awareness.ToString()
+                };
+            }
+
+            return $"Unknown (HRESULT=0x{result:X8})";
+        }
+        catch (DllNotFoundException)
+        {
+            return "Unknown (Shcore.dll 없음)";
+        }
+        catch (Exception ex)
+        {
+            return $"Unknown ({ex.Message})";
+        }
+    }
+
+    [DllImport("Shcore.dll")]
+    private static extern int GetProcessDpiAwareness(IntPtr hprocess, out ProcessDpiAwareness awareness);
+
+    private enum ProcessDpiAwareness
+    {
+        ProcessDpiUnaware = 0,
+        ProcessSystemDpiAware = 1,
+        ProcessPerMonitorDpiAware = 2
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -2145,7 +2477,11 @@ public class AutomationService : IAutomationService, IDisposable
             return;
         }
 
-        _automation?.Dispose();
+        foreach (var automation in _automationBackends)
+        {
+            automation?.Dispose();
+        }
+
         _disposed = true;
         LoggingService.LogInfo("AutomationService 해제됨");
     }
