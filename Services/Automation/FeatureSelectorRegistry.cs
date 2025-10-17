@@ -235,9 +235,33 @@ public static class FeatureSelectorRegistry
                     Action = "Click"
                 },
 
+// 카메라 연결상태 확인
+
                 new AutomationStep
                 {
-                    Description = "18. 카메라 오류 확인 (2초간 체크)",
+                    Description = "18. 카메라 오류 확인 (2초간 체크) - Case01: '카메라를 감지하는 중...' 텍스트 (no cable)",
+                    Selector = new UiaSelector
+                    {
+                        // Case01: 카메라 감지 중 텍스트
+                        AutomationId = "-1985744256",
+                        Name = "카메라를 감지하는 중...",
+                        ClassName = "Static",
+                        ControlType = "Text"
+                    },
+                    Action = "CheckCameraErrors"
+                },
+
+                new AutomationStep
+                {
+                    Description = "18-1. 카메라 오류 확인 (2초간 체크) - Case02: '카메라가 검색되지 않음' ComboBox (Connection fail)",
+                    Selector = new UiaSelector
+                    {
+                        // Case02: 카메라 검색 실패 ComboBox
+                        AutomationId = "65535",
+                        Name = "카메라가 검색되지 않음",
+                        ClassName = "ComboBox",
+                        ControlType = "ComboBox"
+                    },
                     Action = "CheckCameraErrors"
                 },
 

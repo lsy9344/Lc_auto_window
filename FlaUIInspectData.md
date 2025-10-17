@@ -145,6 +145,8 @@ ControlType:Window
 
 #### 22. 카메라 감지 실패 케이스 02
 Case 02 :
+
+
 ControlType : Pane, Name : 연결전송된 촬영
 위 항목에 종속되어 있는 아래 항목 찾기
 

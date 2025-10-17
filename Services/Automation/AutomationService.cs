@@ -1999,7 +1999,7 @@ public class AutomationService : IAutomationService, IDisposable
             var desktop = _automation.GetDesktop();
             var cf = _automation.ConditionFactory;
 
-            // Case01: "카메라를 감지하는 중..." 확인
+            // Case01: "카메라를 감지하는 중..." 확인 (no cable)
             var detectingText = desktop.FindFirstDescendant(
                 cf.ByAutomationId("-1985744256")
                     .And(cf.ByName("카메라를 감지하는 중..."))
@@ -2007,10 +2007,10 @@ public class AutomationService : IAutomationService, IDisposable
 
             if (detectingText != null)
             {
-                throw new InvalidOperationException("카메라 감지 중 오류 발생: '카메라를 감지하는 중...' 상태가 지속됩니다.");
+                throw new InvalidOperationException("카메라 감지 중 오류 발생: '카메라를 감지하는 중...' 상태가 지속됩니다. (케이블 연결 확인 필요)");
             }
 
-            // Case02: "카메라가 검색되지 않음" 확인
+            // Case02: "카메라가 검색되지 않음" 확인 (Connection fail)
             var connectionPane = desktop.FindFirstDescendant(
                 cf.ByControlType(FlaUI.Core.Definitions.ControlType.Pane)
                     .And(cf.ByName("연결전송된 촬영")));
@@ -2027,7 +2027,7 @@ public class AutomationService : IAutomationService, IDisposable
                     var value = valuePattern?.Value ?? string.Empty;
                     if (!string.IsNullOrEmpty(value) && value.Contains("카메라가 검색되지 않음"))
                     {
-                        throw new InvalidOperationException("카메라 연결 오류: '카메라가 검색되지 않음'");
+                        throw new InvalidOperationException("카메라 연결 오류: '카메라가 검색되지 않음' (연결 실패)");
                     }
                 }
             }
