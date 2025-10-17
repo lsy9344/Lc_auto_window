@@ -213,8 +213,96 @@ public static class FeatureSelectorRegistry
 
                 new AutomationStep
                 {
-                    Description = "16. 카메라 오류 확인 (2초간 체크)",
+                    Description = "16. 폴더 선택 버튼 클릭",
+                    Selector = new UiaSelector
+                    {
+                        AutomationId = "1",
+                        Name = "폴더 선택",
+                        ControlType = "Button"
+                    },
+                    Action = "Click"
+                },
+
+                new AutomationStep
+                {
+                    Description = "17. 확인 버튼 클릭하여 윈도우 종료",
+                    Selector = new UiaSelector
+                    {
+                        AutomationId = "1",
+                        Name = "확인",
+                        ControlType = "Button"
+                    },
+                    Action = "Click"
+                },
+
+                new AutomationStep
+                {
+                    Description = "18. 카메라 오류 확인 (2초간 체크)",
                     Action = "CheckCameraErrors"
+                },
+
+                new AutomationStep
+                {
+                    Description = "19. 셔터 설정",
+                    Selector = new UiaSelector
+                    {
+                        AutomationId = "1412051328",
+                        Name = "셔터:",
+                        ControlType = "Text"
+                    },
+                    Action = "SetCameraParameter",
+                    ActionData = "shutter:Shutter"
+                },
+
+                new AutomationStep
+                {
+                    Description = "20. 조리개 설정",
+                    Selector = new UiaSelector
+                    {
+                        AutomationId = "1412053888",
+                        Name = "조리개:",
+                        ControlType = "Text"
+                    },
+                    Action = "SetCameraParameter",
+                    ActionData = "aperture:Aperture"
+                },
+
+                new AutomationStep
+                {
+                    Description = "21. ISO 설정",
+                    Selector = new UiaSelector
+                    {
+                        AutomationId = "1412049280",
+                        Name = "ISO:",
+                        ControlType = "Text"
+                    },
+                    Action = "SetCameraParameter",
+                    ActionData = "iso:Iso"
+                },
+
+                new AutomationStep
+                {
+                    Description = "22. WB 설정",
+                    Selector = new UiaSelector
+                    {
+                        AutomationId = "1412048768",
+                        Name = "WB:",
+                        ControlType = "Text"
+                    },
+                    Action = "SetCameraParameter",
+                    ActionData = "wb:WhiteBalance"
+                },
+
+                new AutomationStep
+                {
+                    Description = "23. 최종 확인 버튼 클릭",
+                    Selector = new UiaSelector
+                    {
+                        AutomationId = "1",
+                        Name = "확인",
+                        ControlType = "Button"
+                    },
+                    Action = "Click"
                 },
 
             ]

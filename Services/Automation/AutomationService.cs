@@ -2061,7 +2061,7 @@ public class AutomationService : IAutomationService, IDisposable
             throw new TimeoutException("폴더 선택창을 8초 동안 찾지 못했습니다 (CabinetWClass, ExplorerFrame, XamlWindow, #32770 모두 탐색)");
         }
 
-        // 지침 2: Ctrl+L 단축키로 경로 입력
+        // 15스텝: Ctrl+L 단축키로 경로 입력 (경로 입력까지만 처리)
         await TypePathIntoFolderPickerAsync(folderPicker, targetPath, ct);
 
         LoggingService.LogInfo($"폴더 선택창 경로 입력 성공: {targetPath}");
@@ -2237,7 +2237,8 @@ private async Task<AutomationElement?> FindFolderPickerGlobalAsync(CancellationT
 
     /// <summary>
     /// 폴더 선택창에 Ctrl+L로 경로를 입력합니다.
-    /// 지침 2: 요소찾기 대신 Ctrl+L 주소창 단축키로 경로 입력
+    /// 책임: 경로 입력까지만 처리하며, 창 닫기는 후속 스텝에서 처리합니다.
+    /// 아키텍처: 단일 책임 원칙에 따라 각 스텝은 명확한 하나의 동작만 담당
     /// </summary>
     private async Task TypePathIntoFolderPickerAsync(AutomationElement folderPicker, string path, CancellationToken ct)
     {
@@ -2245,45 +2246,24 @@ private async Task<AutomationElement?> FindFolderPickerGlobalAsync(CancellationT
 
         try
         {
-            // 지침 2: 창을 찾은 직후 Ctrl+L 전송으로 주소 입력 모드 진입
+            // Ctrl+L 단축키로 주소창 활성화
             folderPicker.Focus();
             await Task.Delay(100, ct);
 
-            // Ctrl+L 단축키로 주소창 활성화
             Keyboard.Press(VirtualKeyShort.CONTROL);
             Keyboard.Press(VirtualKeyShort.KEY_L);
             Keyboard.Release(VirtualKeyShort.KEY_L);
             Keyboard.Release(VirtualKeyShort.CONTROL);
             await Task.Delay(200, ct);
 
-            // 지침 2: 지정 경로 입력 후 Enter
+            // 경로 입력 후 Enter
             Keyboard.Type(path);
             await Task.Delay(100, ct);
             Keyboard.Press(VirtualKeyShort.RETURN);
             Keyboard.Release(VirtualKeyShort.RETURN);
             await Task.Delay(300, ct);
 
-            // 지침 2: 필요 시 '확인/선택/Open/Select' 버튼 눌러 닫기(있을 때만)
-            var automation = folderPicker.Automation ?? _automation;
-            var cf = automation.ConditionFactory;
-            var okButton = folderPicker.FindFirstDescendant(
-                cf.ByControlType(FlaUI.Core.Definitions.ControlType.Button)
-                    .And(cf.ByName("확인")
-                        .Or(cf.ByName("선택"))
-                        .Or(cf.ByName("Open"))
-                        .Or(cf.ByName("Select"))
-                        .Or(cf.ByName("OK"))));
-
-            if (okButton != null)
-            {
-                LoggingService.LogInfo("확인/선택 버튼 클릭");
-                okButton.AsButton().Invoke();
-                await Task.Delay(300, ct);
-            }
-            else
-            {
-                LoggingService.LogInfo("확인 버튼 없음 - Enter만으로 폴더 선택 완료");
-            }
+            LoggingService.LogInfo("경로 입력 완료 - 폴더 선택창은 후속 스텝에서 처리");
         }
         catch (Exception ex)
         {

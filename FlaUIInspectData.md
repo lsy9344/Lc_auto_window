@@ -124,7 +124,7 @@ ControlType:ToolBar
 
 #### 19. 'C:\dabi_shoot' 텍스트 붙여넣기
 
-#### 20. 최종 '확인' 버튼 클릭릭
+#### 20. 최종 '확인' 버튼 클릭
 AutomationId:1
 Name:확인
 ClassName:Button
