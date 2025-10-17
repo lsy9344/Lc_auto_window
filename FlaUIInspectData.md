@@ -136,18 +136,17 @@ ControlType:Button
 Cas01 : There is no cable
 Case02 : Connection fail
 
+#### 21. 카메라 감지 실패 케이스 01
 Case01 :
-AutomationId:-1985744256
-Name:카메라를 감지하는 중...
-ClassName:Static
-ControlType:Text
+AutomationId:Not Supported
+Name:Lightroom
+ClassName:Afx:0000000140000000:0
+ControlType:Window
 
+#### 22. 카메라 감지 실패 케이스 02
 Case 02 :
-
-
-ControlType : Pane, Name : 연결전송된 촬영
-위 항목에 종속되어 있는 아래 항목 찾기
-
+(ControlType : Pane, Name : 연결전송된 촬영
+필요에 따라 이이 항목에 종속되어 있는 아래 항목 찾기)
 AutomationId:65535
 Name:카메라가 검색되지 않음
 ClassName:ComboBox
